@@ -1,4 +1,4 @@
-struct Peer: Identifiable, Hashable {
+struct Peer: Sendable, Identifiable, Hashable {
     let displayName: String
-    var id: String { displayName }
+    nonisolated var id: String { displayName }
 }

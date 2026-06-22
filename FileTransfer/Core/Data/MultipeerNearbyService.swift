@@ -1,6 +1,7 @@
 import Foundation
 import MultipeerConnectivity
 
+@MainActor
 final class MultipeerNearbyService: NSObject, NearbySessionService {
     private static let serviceType = "ft-demo"
 
@@ -10,8 +11,12 @@ final class MultipeerNearbyService: NSObject, NearbySessionService {
     private var session: MCSession?
     private var advertiser: MCNearbyServiceAdvertiser?
     private var browser: MCNearbyServiceBrowser?
-    private var invitationHandler: ((Bool, MCSession?) -> Void)?
-    private var peerIDMap: [String: MCPeerID] = [:]
+
+    // Written from nonisolated MC callbacks, read from @MainActor methods.
+    // nonisolated(unsafe) documents that we own the safety guarantee: writes
+    // happen before the @MainActor task that triggers the corresponding read.
+    nonisolated(unsafe) private var invitationHandler: ((Bool, MCSession?) -> Void)?
+    nonisolated(unsafe) private var peerIDMap: [String: MCPeerID] = [:]
 
     func start(displayName: String) {
         let peerID = MCPeerID(displayName: displayName)
@@ -70,16 +75,15 @@ final class MultipeerNearbyService: NSObject, NearbySessionService {
 extension MultipeerNearbyService: MCSessionDelegate {
     nonisolated func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
         let peer = Peer(displayName: peerID.displayName)
+        if state == .notConnected {
+            peerIDMap.removeValue(forKey: peer.id)
+        }
         Task { @MainActor [weak self] in
             guard let self else { return }
             switch state {
-            case .connected:
-                delegate?.didConnect(peer: peer)
-            case .notConnected:
-                peerIDMap.removeValue(forKey: peer.id)
-                delegate?.didDisconnect(peer: peer)
-            default:
-                break
+            case .connected: delegate?.didConnect(peer: peer)
+            case .notConnected: delegate?.didDisconnect(peer: peer)
+            default: break
             }
         }
     }
@@ -100,10 +104,9 @@ extension MultipeerNearbyService: MCSessionDelegate {
 extension MultipeerNearbyService: MCNearbyServiceAdvertiserDelegate {
     nonisolated func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
         let peer = Peer(displayName: peerID.displayName)
+        self.invitationHandler = invitationHandler
         Task { @MainActor [weak self] in
-            guard let self else { return }
-            self.invitationHandler = invitationHandler
-            delegate?.didReceiveInvitation(from: peer)
+            self?.delegate?.didReceiveInvitation(from: peer)
         }
     }
 
@@ -115,19 +118,17 @@ extension MultipeerNearbyService: MCNearbyServiceAdvertiserDelegate {
 extension MultipeerNearbyService: MCNearbyServiceBrowserDelegate {
     nonisolated func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String: String]?) {
         let peer = Peer(displayName: peerID.displayName)
+        peerIDMap[peer.id] = peerID
         Task { @MainActor [weak self] in
-            guard let self else { return }
-            peerIDMap[peer.id] = peerID
-            delegate?.didDiscover(peer: peer)
+            self?.delegate?.didDiscover(peer: peer)
         }
     }
 
     nonisolated func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
         let peer = Peer(displayName: peerID.displayName)
+        peerIDMap.removeValue(forKey: peer.id)
         Task { @MainActor [weak self] in
-            guard let self else { return }
-            peerIDMap.removeValue(forKey: peer.id)
-            delegate?.didLose(peer: peer)
+            self?.delegate?.didLose(peer: peer)
         }
     }
 

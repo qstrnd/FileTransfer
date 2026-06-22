@@ -1,11 +1,11 @@
 import Foundation
 
-struct TransferMessage: Identifiable, Equatable {
+struct TransferMessage: Sendable, Identifiable, Equatable {
     let id: UUID
     let senderName: String
     let text: String
 
-    init(senderName: String, text: String) {
+    nonisolated init(senderName: String, text: String) {
         self.id = UUID()
         self.senderName = senderName
         self.text = text
