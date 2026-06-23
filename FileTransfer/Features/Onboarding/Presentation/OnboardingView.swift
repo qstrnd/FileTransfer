@@ -168,7 +168,7 @@ struct OnboardingView: View {
     // MARK: Subtitle
 
     private var subtitleSection: some View {
-        Text("Choose how your device\nis visible to others")
+        Text("Choose how this device\nis visible to others")
             .font(.title3)
             .multilineTextAlignment(.center)
             .foregroundStyle(.secondary)
