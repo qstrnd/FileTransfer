@@ -79,9 +79,11 @@ private struct EmojiKeyboard: UIViewRepresentable {
 
 struct OnboardingView: View {
     @State private var viewModel: OnboardingViewModel
+    var namespace: Namespace.ID
 
-    init(onProceed: @escaping (String, String) -> Void) {
+    init(onProceed: @escaping (String, String) -> Void, namespace: Namespace.ID) {
         _viewModel = State(initialValue: OnboardingViewModel(onProceed: onProceed))
+        self.namespace = namespace
     }
 
     @FocusState private var isNameFocused: Bool
@@ -145,6 +147,7 @@ struct OnboardingView: View {
                     Text(viewModel.emoji)
                         .font(.system(size: 64))
                 }
+                .matchedGeometryEffect(id: "heroCircle", in: namespace)
             }
             .buttonStyle(.plain)
 
@@ -232,5 +235,6 @@ struct OnboardingView: View {
 }
 
 #Preview {
-    OnboardingView(onProceed: { _, _ in })
+    @Previewable @Namespace var ns
+    OnboardingView(onProceed: { _, _ in }, namespace: ns)
 }

@@ -1,10 +1,11 @@
 import Foundation
 import Observation
+import SwiftUI
 
 @MainActor
 @Observable
 final class AppCoordinator {
-    private(set) var showMain = false
+    private(set) var searchViewModel: SearchViewModel?
 
     private let service: any NearbySessionService
 
@@ -13,6 +14,19 @@ final class AppCoordinator {
     }
 
     func proceedFromOnboarding(emoji: String, name: String) {
-        showMain = true
+        withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
+            searchViewModel = SearchViewModel(
+                emoji: emoji,
+                name: name,
+                service: service,
+                onBack: { [weak self] in self?.backToOnboarding() }
+            )
+        }
+    }
+
+    private func backToOnboarding() {
+        withAnimation(.spring(response: 0.55, dampingFraction: 0.85)) {
+            searchViewModel = nil
+        }
     }
 }
