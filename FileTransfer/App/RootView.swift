@@ -4,10 +4,10 @@ struct RootView: View {
     @State private var coordinator = AppCoordinator()
 
     var body: some View {
-        if let vm = coordinator.transferViewModel {
-            TransferView(viewModel: vm)
+        if coordinator.showMain {
+            MainView()
         } else {
-            SetupView(onStart: coordinator.start)
+            OnboardingView(onProceed: coordinator.proceedFromOnboarding)
         }
     }
 }

@@ -42,7 +42,13 @@ All ViewModels and `AppCoordinator` use the **Observation framework** (`@Observa
 
 ## Language
 
-Use **Swift 6.0** strict concurrency. All types are `@MainActor` by default (enforced via `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` in build settings). Cross-actor calls must use `await`; `nonisolated` is reserved for genuinely non-isolated work (e.g. MC delegate callbacks that hop back with `Task { @MainActor in … }`).
+Use **Swift 6.0** strict concurrency throughout. All types are `@MainActor` by default (enforced via `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` in build settings).
+
+- **Always prefer modern concurrency** — `async`/`await`, `AsyncStream`, `Actor`, `Task`, and structured concurrency. Never use `DispatchQueue`, `OperationQueue`, or completion-handler APIs when an async alternative exists.
+- Cross-actor calls must use `await`.
+- UIKit delegate protocols are `@MainActor` in iOS 26; implement them as plain methods on an `@MainActor` class — no `nonisolated` needed.
+- `nonisolated` is reserved for pure, stateless functions (e.g. `isValidEmoji`) that must be callable from any isolation context. If you find yourself writing `nonisolated` + a hop back to MainActor, reconsider the design.
+- Use `Task { @MainActor in … }` only when you need to defer work past the current synchronous scope (e.g. calling `becomeFirstResponder` after a layout pass). Do not use it as a substitute for proper `async`/`await` call chains.
 
 ## Git
 

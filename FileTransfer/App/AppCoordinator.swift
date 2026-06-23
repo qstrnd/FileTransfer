@@ -4,7 +4,7 @@ import Observation
 @MainActor
 @Observable
 final class AppCoordinator {
-    private(set) var transferViewModel: TransferViewModel?
+    private(set) var showMain = false
 
     private let service: any NearbySessionService
 
@@ -12,10 +12,7 @@ final class AppCoordinator {
         self.service = service
     }
 
-    func start(displayName: String) {
-        service.start(displayName: displayName)
-        transferViewModel = TransferViewModel(service: service, onStop: { [weak self] in
-            self?.transferViewModel = nil
-        })
+    func proceedFromOnboarding(emoji: String, name: String) {
+        showMain = true
     }
 }
