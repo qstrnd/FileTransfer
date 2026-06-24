@@ -59,13 +59,16 @@ final class SearchViewModel {
     /// so discovery begins fresh without stale peer state.
     func handleForeground() {
         log.info("handleForeground — resetting session")
-        service.stop()
+        // Clear state BEFORE stopping so that any async delegate callbacks
+        // triggered by session.disconnect() land on an already-clean map
+        // and cannot re-set peers to .connected.
         withAnimation {
-            discoveredPeers = []
             peerStates = [:]
+            discoveredPeers = []
             pendingInvitationFrom = nil
             expiredInvitationFrom = nil
         }
+        service.stop()
         service.start(displayName: "\(emoji) \(name)", deviceID: deviceID)
     }
 
@@ -149,17 +152,23 @@ extension SearchViewModel: NearbySessionServiceDelegate {
     func didConnect(peer: Peer) {
         let preState = peerStates[peer]
         log.info("didConnect — \(peer.displayName, privacy: .public) currentState=\(String(describing: preState), privacy: .public)")
+
+        // Only honour connection events for peers we explicitly interacted with.
+        // If preState is nil or .idle the connection is unsolicited (e.g. MPC
+        // auto-reconnect after returning from background). Accepting it would
+        // silently restore the connected UI even though we reset on foreground.
+        guard preState == .connecting || preState == .connected else {
+            log.warning("didConnect — ignoring unsolicited connection from \(peer.displayName, privacy: .public) (state=\(String(describing: preState), privacy: .public))")
+            return
+        }
+
         if preState == .connected {
-            // Receiving side already set .connected in acceptInvitation; just record history.
+            // Receiving side already set .connected in acceptInvitation.
             connectionHistory.record(peer: peer)
             log.debug("didConnect — already connected (receiving side), history updated")
             return
         }
-        let current = preState ?? .connecting
-        guard let next = current.applying(.connectionAccepted) else {
-            log.warning("didConnect — unexpected transition from \(String(describing: current), privacy: .public)")
-            return
-        }
+        guard let next = preState!.applying(.connectionAccepted) else { return }
         withAnimation { peerStates[peer] = next }
         connectionHistory.record(peer: peer)
         log.debug("didConnect — state → \(String(describing: next), privacy: .public); history updated")
