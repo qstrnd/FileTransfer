@@ -147,7 +147,7 @@ struct OnboardingView: View {
                     Text(viewModel.emoji)
                         .font(.system(size: 64))
                 }
-                .matchedGeometryEffect(id: "heroCircle", in: namespace)
+                .matchedGeometryEffect(id: "heroCircle", in: namespace, isSource: true)
             }
             .buttonStyle(.plain)
 

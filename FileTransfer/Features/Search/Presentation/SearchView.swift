@@ -11,7 +11,9 @@ struct SearchView: View {
     @State private var showDataExchange = false
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        // Plain ZStack (no .bottom alignment) so the VStack is anchored top-left
+        // and the hero circle is always rendered at its correct position.
+        ZStack {
             Color(.systemGroupedBackground).ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -19,28 +21,43 @@ struct SearchView: View {
                     .padding(.top, 100)
                     .zIndex(1)
 
-                if viewModel.discoveredPeers.isEmpty {
-                    if showText {
-                        Spacer()
-                        searchingTextView
-                            .padding(.horizontal, 24)
+                // Content area always fills remaining space so the VStack height
+                // equals the full screen height from the very first render frame.
+                // Without this the VStack is only ~228 pt tall on first appearance
+                // (before showText/showRings kick in), which placed the hero near
+                // the bottom of the screen and caused the visible jump.
+                ZStack {
+                    if viewModel.discoveredPeers.isEmpty {
+                        if showText {
+                            VStack {
+                                Spacer()
+                                searchingTextView
+                                    .padding(.horizontal, 24)
+                                Spacer()
+                                Spacer()
+                            }
                             .transition(.opacity)
-                        Spacer()
-                        Spacer()
+                        }
+                    } else {
+                        peerScrollSection
+                            .transition(.opacity)
                     }
-                } else {
-                    peerScrollSection
-                        .transition(.opacity)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .animation(.easeInOut(duration: 0.35), value: viewModel.discoveredPeers.isEmpty)
             }
-            .animation(.easeInOut(duration: 0.35), value: viewModel.discoveredPeers.isEmpty)
         }
         .safeAreaInset(edge: .bottom) {
-            if viewModel.hasConnectedPeers {
-                sendButton
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .animation(.spring(duration: 0.35), value: viewModel.hasConnectedPeers)
+            Group {
+                if viewModel.hasConnectedPeers {
+                    sendButton
+                } else if !viewModel.discoveredPeers.isEmpty {
+                    hintText
+                }
             }
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .animation(.spring(duration: 0.35), value: viewModel.hasConnectedPeers)
+            .animation(.easeInOut(duration: 0.35), value: viewModel.discoveredPeers.isEmpty)
         }
         .alert(
             "Connection Request",
@@ -82,7 +99,10 @@ struct SearchView: View {
                     Text(viewModel.emoji)
                         .font(.system(size: 64))
                 }
-                .matchedGeometryEffect(id: "heroCircle", in: namespace)
+                // isSource: false — this view tracks the OnboardingView's hero frame,
+                // so it starts at the onboarding position and animates up rather than
+                // flashing at its own layout position first.
+                .matchedGeometryEffect(id: "heroCircle", in: namespace, isSource: false)
             }
             .buttonStyle(.plain)
         }
@@ -165,6 +185,15 @@ struct SearchView: View {
         .padding(.horizontal, 24)
         .padding(.bottom, 16)
     }
+
+    private var hintText: some View {
+        Text("Tap on a device to establish connection")
+            .font(.body)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 40)
+            .padding(.bottom, 28)
+    }
 }
 
 // MARK: - PeerCell
@@ -211,7 +240,7 @@ struct PeerCell: View {
             }
         }
         .buttonStyle(.plain)
-        .disabled(state == .connecting || state == .connected)
+        .disabled(state == .connecting)   // connecting: can't interrupt; connected: tap disconnects
         .onChange(of: state) { _, new in
             if new == .rejected { playRejectedAnimation() }
         }
@@ -277,30 +306,36 @@ private struct SpinnerRing: View {
 // MARK: - Searching text with shimmer
 
 private struct SearchingText: View {
-    @State private var phase: CGFloat = -0.3
+    // TimelineView(.animation) updates every display frame, giving us a reliable
+    // per-frame phase value without relying on SwiftUI interpolating @State into
+    // gradient stop positions (which it doesn't do reliably).
+    private static let cycleDuration: TimeInterval = 2.8
 
     var body: some View {
-        Text("Searching\nfor other devices\non the network...")
-            .font(.system(size: 30, weight: .bold))
-            .multilineTextAlignment(.leading)
-            // Gradient applied directly as the text colour so the shimmer is
-            // visible only through the text glyphs — no mask layer needed.
-            .foregroundStyle(
-                LinearGradient(
-                    stops: [
-                        .init(color: Color.secondary,          location: max(0, phase - 0.25)),
-                        .init(color: Color(white: 0.72),       location: phase),
-                        .init(color: Color.secondary,          location: min(1, phase + 0.25)),
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
+        TimelineView(.animation) { context in
+            let phase = shimmerPhase(at: context.date)
+            Text("Searching\nfor other devices\non the network...")
+                .font(.system(size: 30, weight: .bold))
+                .multilineTextAlignment(.leading)
+                .foregroundStyle(
+                    LinearGradient(
+                        stops: [
+                            .init(color: Color.secondary,              location: max(0, phase - 0.25)),
+                            .init(color: Color(UIColor.systemGray5),   location: phase),
+                            .init(color: Color.secondary,              location: min(1, phase + 0.25)),
+                        ],
+                        // ~45° oblique sweep: top-leading → bottom-trailing
+                        startPoint: UnitPoint(x: 0, y: 0.3),
+                        endPoint:   UnitPoint(x: 1, y: 0.7)
+                    )
                 )
-            )
-            .onAppear {
-                withAnimation(.linear(duration: 3.0).repeatForever(autoreverses: false)) {
-                    phase = 1.3
-                }
-            }
+        }
+    }
+
+    private func shimmerPhase(at date: Date) -> CGFloat {
+        let t = date.timeIntervalSinceReferenceDate
+            .truncatingRemainder(dividingBy: Self.cycleDuration) / Self.cycleDuration
+        return CGFloat(t) * 1.6 - 0.3   // sweeps from -0.3 (off-left) to 1.3 (off-right)
     }
 }
 
@@ -458,8 +493,7 @@ private let samplePeers: [Peer] = [
 
 #Preview("State: connected (with send button)") {
     @Previewable @Namespace var ns
-    let p0 = samplePeers[0]
-    let p1 = samplePeers[1]
+    let p0 = samplePeers[0]; let p1 = samplePeers[1]
     SearchView(viewModel: previewVM(peers: [p0, p1, samplePeers[2], samplePeers[3]],
                                     states: [p0: .connected, p1: .connected]), namespace: ns)
 }

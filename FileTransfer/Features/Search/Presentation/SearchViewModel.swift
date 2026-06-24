@@ -47,9 +47,27 @@ final class SearchViewModel {
     // MARK: - Actions
 
     func connect(to peer: Peer) {
-        guard peerStates[peer] == nil || peerStates[peer] == .idle else { return }
-        peerStates[peer] = .connecting
-        service.connect(to: peer)
+        switch peerStates[peer] ?? .idle {
+        case .connected:
+            disconnect(from: peer)
+        case .idle, .rejected:
+            peerStates[peer] = .connecting
+            service.connect(to: peer)
+            // Failsafe: MPC doesn't always fire didDisconnect for silent rejections.
+            // Reset to idle after the invitation timeout so the user can try again.
+            Task {
+                try? await Task.sleep(for: .seconds(10))
+                if peerStates[peer] == .connecting {
+                    withAnimation(.spring(duration: 0.4)) { peerStates[peer] = .idle }
+                }
+            }
+        case .connecting:
+            break
+        }
+    }
+
+    func disconnect(from peer: Peer) {
+        withAnimation(.spring(duration: 0.4)) { peerStates[peer] = .idle }
     }
 
     func acceptInvitation() {
