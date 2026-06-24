@@ -1,6 +1,9 @@
 import Foundation
 import Observation
+import OSLog
 import SwiftUI
+
+private let log = Logger(subsystem: "com.qstrnd.FileTransfer", category: "Search")
 
 @Observable
 final class SearchViewModel {
@@ -10,6 +13,8 @@ final class SearchViewModel {
     var discoveredPeers: [Peer] = []
     var peerStates: [Peer: PeerConnectionState] = [:]
     var pendingInvitationFrom: Peer? = nil
+    /// Set briefly when an incoming invitation expires before the user responds.
+    var expiredInvitationFrom: Peer? = nil
 
     var connectedPeers: [Peer] { peerStates.filter { $0.value == .connected }.map(\.key) }
     var hasConnectedPeers: Bool { !connectedPeers.isEmpty }
@@ -38,50 +43,62 @@ final class SearchViewModel {
     // MARK: - Lifecycle
 
     func start() {
+        log.info("start — emoji=\(self.emoji, privacy: .public) deviceID=\(self.deviceID, privacy: .public)")
         service.delegate = self
         service.start(displayName: "\(emoji) \(name)", deviceID: deviceID)
     }
 
     func stop() {
+        log.info("stop")
         service.delegate = nil
         service.stop()
     }
 
     func goBack() {
+        log.info("goBack")
         stop()
         onBack()
     }
 
     // MARK: - Actions
 
-    /// Route `initiateConnection` through `ConnectionPolicy` so business rules
-    /// are the single source of truth for which states allow (re-)connecting.
     func connect(to peer: Peer) {
         let current = peerStates[peer] ?? .idle
+        log.info("connect — peer=\(peer.displayName, privacy: .public) currentState=\(String(describing: current), privacy: .public)")
         guard ConnectionPolicy.canInitiate(from: current),
-              let next = current.applying(.initiateConnection) else { return }
-
+              let next = current.applying(.initiateConnection) else {
+            log.warning("connect — blocked by policy from state \(String(describing: current), privacy: .public)")
+            return
+        }
         peerStates[peer] = next
+        log.debug("connect — state \(String(describing: current), privacy: .public) → \(String(describing: next), privacy: .public)")
         service.connect(to: peer)
 
-        // Failsafe: MPC does not always fire didDisconnect for silent rejections.
+        // Failsafe: fires 3 s after the MPC invitation timeout so MPC's own
+        // didDisconnect has a chance to set the proper .rejected state first.
         Task {
-            try? await Task.sleep(for: .seconds(10))
+            try? await Task.sleep(for: .seconds(mcInvitationTimeout + 3))
             if peerStates[peer] == .connecting {
+                log.warning("connect — failsafe fired for \(peer.displayName, privacy: .public); resetting to idle")
                 withAnimation(.spring(duration: 0.4)) { peerStates[peer] = .idle }
             }
         }
     }
 
     func disconnect(from peer: Peer) {
-        guard let next = (peerStates[peer] ?? .idle).applying(.initiateDisconnection) else { return }
+        let current = peerStates[peer] ?? .idle
+        log.info("disconnect — peer=\(peer.displayName, privacy: .public) currentState=\(String(describing: current), privacy: .public)")
+        guard let next = current.applying(.initiateDisconnection) else {
+            log.warning("disconnect — invalid from state \(String(describing: current), privacy: .public)")
+            return
+        }
         withAnimation(.spring(duration: 0.4)) { peerStates[peer] = next }
-        // Note: MCSession has no per-peer disconnect API. Calling session.disconnect()
-        // disconnects all peers; instead we rely on the state update here and let
-        // MPC fire didDisconnect on the remote side when the session is eventually torn down.
+        log.debug("disconnect — state \(String(describing: current), privacy: .public) → \(String(describing: next), privacy: .public)")
+        service.disconnect(from: peer)
     }
 
     func acceptInvitation() {
+        log.info("acceptInvitation — from=\(self.pendingInvitationFrom?.displayName ?? "nil", privacy: .public)")
         if let peer = pendingInvitationFrom {
             guard let next = (peerStates[peer] ?? .idle).applying(.connectionAccepted) else { return }
             peerStates[peer] = next
@@ -91,6 +108,7 @@ final class SearchViewModel {
     }
 
     func declineInvitation() {
+        log.info("declineInvitation — from=\(self.pendingInvitationFrom?.displayName ?? "nil", privacy: .public)")
         service.declineInvitation()
         pendingInvitationFrom = nil
     }
@@ -100,11 +118,13 @@ final class SearchViewModel {
 
 extension SearchViewModel: NearbySessionServiceDelegate {
     func didDiscover(peer: Peer) {
+        log.info("didDiscover — \(peer.displayName, privacy: .public) deviceID=\(peer.deviceID?.uuidString ?? "nil", privacy: .public)")
         guard !discoveredPeers.contains(peer) else { return }
         withAnimation(.spring(duration: 0.35)) { discoveredPeers.append(peer) }
     }
 
     func didLose(peer: Peer) {
+        log.info("didLose — \(peer.displayName, privacy: .public)")
         withAnimation(.spring(duration: 0.35)) {
             discoveredPeers.removeAll { $0 == peer }
             peerStates.removeValue(forKey: peer)
@@ -112,18 +132,27 @@ extension SearchViewModel: NearbySessionServiceDelegate {
     }
 
     func didConnect(peer: Peer) {
-        guard let next = (peerStates[peer] ?? .connecting).applying(.connectionAccepted) else { return }
+        let current = peerStates[peer] ?? .connecting
+        log.info("didConnect — \(peer.displayName, privacy: .public) currentState=\(String(describing: current), privacy: .public)")
+        guard let next = current.applying(.connectionAccepted) else {
+            log.warning("didConnect — invalid transition from \(String(describing: current), privacy: .public)")
+            return
+        }
         withAnimation { peerStates[peer] = next }
-        // Rule 5: persist the connection so the two devices qualify for future auto-reconnect.
         connectionHistory.record(peer: peer)
+        log.debug("didConnect — state → \(String(describing: next), privacy: .public); history updated")
     }
 
     func didDisconnect(peer: Peer) {
         let current = peerStates[peer] ?? .idle
-        // If we were connecting and the peer disconnected, they declined our invitation.
         let event: ConnectionEvent = (current == .connecting) ? .connectionDeclined : .peerDisconnected
-        guard let next = current.applying(event) else { return }
+        log.info("didDisconnect — \(peer.displayName, privacy: .public) currentState=\(String(describing: current), privacy: .public) event=\(String(describing: event), privacy: .public)")
+        guard let next = current.applying(event) else {
+            log.warning("didDisconnect — invalid transition from \(String(describing: current), privacy: .public)")
+            return
+        }
         withAnimation { peerStates[peer] = next }
+        log.debug("didDisconnect — state → \(String(describing: next), privacy: .public)")
 
         if next == .rejected {
             Task {
@@ -131,15 +160,33 @@ extension SearchViewModel: NearbySessionServiceDelegate {
                 withAnimation(.spring(duration: 0.4)) {
                     if peerStates[peer] == .rejected { peerStates[peer] = .idle }
                 }
+                log.debug("didDisconnect — rejected state cleared for \(peer.displayName, privacy: .public)")
             }
         }
     }
 
     func didReceiveInvitation(from peer: Peer) {
+        log.info("didReceiveInvitation — from \(peer.displayName, privacy: .public)")
         pendingInvitationFrom = peer
+
+        // Auto-dismiss the alert after the MPC invitation timeout so the alert
+        // does not linger forever. Show a brief banner so the user knows why it disappeared.
+        Task {
+            try? await Task.sleep(for: .seconds(mcInvitationTimeout))
+            guard pendingInvitationFrom == peer else { return }
+            log.info("didReceiveInvitation — timeout; auto-dismissing alert for \(peer.displayName, privacy: .public)")
+            withAnimation {
+                pendingInvitationFrom = nil
+                expiredInvitationFrom = peer
+            }
+            try? await Task.sleep(for: .seconds(4))
+            withAnimation { expiredInvitationFrom = nil }
+        }
     }
 
-    func didReceive(message: TransferMessage) {}
+    func didReceive(message: TransferMessage) {
+        log.debug("didReceive — from \(message.senderName, privacy: .public): \(message.text, privacy: .private)")
+    }
 }
 
 // MARK: - View helpers

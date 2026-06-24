@@ -46,6 +46,8 @@ struct SearchView: View {
             Group {
                 if viewModel.hasConnectedPeers {
                     sendButton
+                } else if let expired = viewModel.expiredInvitationFrom {
+                    expiredRequestBanner(for: expired)
                 } else if !viewModel.discoveredPeers.isEmpty {
                     hintText
                 }
@@ -53,6 +55,7 @@ struct SearchView: View {
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .animation(.spring(duration: 0.35), value: viewModel.hasConnectedPeers)
             .animation(.easeInOut(duration: 0.35), value: viewModel.discoveredPeers.isEmpty)
+            .animation(.spring(duration: 0.35), value: viewModel.expiredInvitationFrom == nil)
         }
         .alert(
             "Connection Request",
@@ -145,12 +148,14 @@ struct SearchView: View {
     }
 
     private func peerCell(_ peer: Peer) -> some View {
-        PeerCell(
-            peer: peer,
-            state: viewModel.peerStates[peer] ?? .idle,
-            onTap: { viewModel.connect(to: peer) }
-        )
-        .transition(.scale(scale: 0.8).combined(with: .opacity))
+        let state = viewModel.peerStates[peer] ?? .idle
+        // Route the tap to the correct action: connected peers use disconnect,
+        // all other states use connect (policy guards further).
+        let action: () -> Void = (state == .connected)
+            ? { viewModel.disconnect(from: peer) }
+            : { viewModel.connect(to: peer) }
+        return PeerCell(peer: peer, state: state, onTap: action)
+            .transition(.scale(scale: 0.8).combined(with: .opacity))
     }
 
     // MARK: - Bottom bar
@@ -176,6 +181,18 @@ struct SearchView: View {
             .multilineTextAlignment(.center)
             .padding(.horizontal, 40)
             .padding(.bottom, 28)
+    }
+
+    private func expiredRequestBanner(for peer: Peer) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "clock.badge.xmark")
+                .foregroundStyle(.secondary)
+            Text("Request from \(peer.nameComponent) expired")
+                .font(.body)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 40)
+        .padding(.bottom, 28)
     }
 }
 
