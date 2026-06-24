@@ -124,3 +124,14 @@ extension SearchViewModel: NearbySessionServiceDelegate {
 
     func didReceive(message: TransferMessage) {}
 }
+
+// MARK: - View helpers
+
+extension SearchViewModel {
+    /// Peers split into rows of 2; an odd final peer gets its own row (centered by the caller).
+    var peerRows: [[Peer]] {
+        stride(from: 0, to: discoveredPeers.count, by: 2).map { i in
+            Array(discoveredPeers[i..<min(i + 2, discoveredPeers.count)])
+        }
+    }
+}

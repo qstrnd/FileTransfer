@@ -1,7 +1,5 @@
 import SwiftUI
 
-// MARK: - SearchView
-
 struct SearchView: View {
     var viewModel: SearchViewModel
     var namespace: Namespace.ID
@@ -11,8 +9,6 @@ struct SearchView: View {
     @State private var showDataExchange = false
 
     var body: some View {
-        // Plain ZStack (no .bottom alignment) so the VStack is anchored top-left
-        // and the hero circle is always rendered at its correct position.
         ZStack {
             Color(.systemGroupedBackground).ignoresSafeArea()
 
@@ -22,16 +18,15 @@ struct SearchView: View {
                     .zIndex(1)
 
                 // Content area always fills remaining space so the VStack height
-                // equals the full screen height from the very first render frame.
-                // Without this the VStack is only ~228 pt tall on first appearance
-                // (before showText/showRings kick in), which placed the hero near
-                // the bottom of the screen and caused the visible jump.
+                // equals the full screen height from the very first render frame,
+                // keeping the hero circle at a stable position throughout.
                 ZStack {
                     if viewModel.discoveredPeers.isEmpty {
                         if showText {
                             VStack {
                                 Spacer()
-                                searchingTextView
+                                SearchingText()
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(.horizontal, 24)
                                 Spacer()
                                 Spacer()
@@ -83,7 +78,7 @@ struct SearchView: View {
         .onDisappear { viewModel.stop() }
     }
 
-    // MARK: Hero
+    // MARK: - Hero
 
     private var heroSection: some View {
         ZStack {
@@ -99,27 +94,16 @@ struct SearchView: View {
                     Text(viewModel.emoji)
                         .font(.system(size: 64))
                 }
-                // isSource: false — this view tracks the OnboardingView's hero frame,
-                // so it starts at the onboarding position and animates up rather than
-                // flashing at its own layout position first.
                 .matchedGeometryEffect(id: "heroCircle", in: namespace, isSource: false)
             }
             .buttonStyle(.plain)
         }
     }
 
-    // MARK: Searching text
-
-    private var searchingTextView: some View {
-        SearchingText()
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    // MARK: Peer grid
+    // MARK: - Peer grid
 
     private var peerScrollSection: some View {
         ZStack(alignment: .top) {
-            // Gradient first → behind scroll content so peer circles render on top of it.
             LinearGradient(
                 stops: [
                     .init(color: Color(.systemGroupedBackground),               location: 0.00),
@@ -134,7 +118,6 @@ struct SearchView: View {
             .frame(height: 200)
             .allowsHitTesting(false)
 
-            // ScrollView second → peer circles render on top of the gradient above
             ScrollView {
                 LazyVStack(spacing: 32) {
                     ForEach(viewModel.peerRows, id: \.first?.id) { row in
@@ -170,7 +153,7 @@ struct SearchView: View {
         .transition(.scale(scale: 0.8).combined(with: .opacity))
     }
 
-    // MARK: Send button
+    // MARK: - Bottom bar
 
     private var sendButton: some View {
         let count = viewModel.connectedPeers.count
@@ -193,217 +176,6 @@ struct SearchView: View {
             .multilineTextAlignment(.center)
             .padding(.horizontal, 40)
             .padding(.bottom, 28)
-    }
-}
-
-// MARK: - PeerCell
-
-struct PeerCell: View {
-    let peer: Peer
-    let state: PeerConnectionState
-    let onTap: () -> Void
-
-    @State private var shakeOffset: CGFloat = 0
-    @State private var lockOpacity: Double = 0
-
-    private let circleSize: CGFloat = 100
-    private let ringSize: CGFloat = 118
-
-    var body: some View {
-        Button(action: onTap) {
-            VStack(spacing: 10) {
-                ZStack {
-                    stateRing
-                    ZStack {
-                        Circle()
-                            .fill(.white)
-                            .frame(width: circleSize, height: circleSize)
-                            .shadow(color: .black.opacity(0.07), radius: 10, x: 0, y: 2)
-                        Text(peer.emojiComponent)
-                            .font(.system(size: 44))
-                        if state == .rejected {
-                            Image(systemName: "lock.fill")
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundStyle(.white)
-                                .padding(6)
-                                .background(Color.red.opacity(0.85), in: Circle())
-                                .opacity(lockOpacity)
-                        }
-                    }
-                    .offset(x: shakeOffset)
-                }
-
-                Text(peer.nameComponent)
-                    .font(.system(size: 14))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-            }
-        }
-        .buttonStyle(.plain)
-        .disabled(state == .connecting)   // connecting: can't interrupt; connected: tap disconnects
-        .onChange(of: state) { _, new in
-            if new == .rejected { playRejectedAnimation() }
-        }
-    }
-
-    @ViewBuilder
-    private var stateRing: some View {
-        switch state {
-        case .idle:
-            EmptyView()
-        case .connecting:
-            SpinnerRing(diameter: ringSize)
-        case .connected:
-            Circle()
-                .stroke(Color.accentColor, lineWidth: 3)
-                .frame(width: ringSize, height: ringSize)
-        case .rejected:
-            Circle()
-                .stroke(Color.red.opacity(0.4), lineWidth: 2)
-                .frame(width: ringSize, height: ringSize)
-        }
-    }
-
-    private func playRejectedAnimation() {
-        Task {
-            // Shake: 7 steps of alternating offsets, 55 ms each
-            let offsets: [CGFloat] = [10, -10, 8, -8, 5, -5, 0]
-            for offset in offsets {
-                withAnimation(.linear(duration: 0.055)) { shakeOffset = offset }
-                try? await Task.sleep(for: .milliseconds(55))
-            }
-            shakeOffset = 0
-
-            // Lock icon: fade in, hold, fade out
-            withAnimation(.easeIn(duration: 0.2)) { lockOpacity = 1 }
-            try? await Task.sleep(for: .seconds(1.5))
-            withAnimation(.easeOut(duration: 0.35)) { lockOpacity = 0 }
-        }
-    }
-}
-
-// MARK: - SpinnerRing
-
-private struct SpinnerRing: View {
-    let diameter: CGFloat
-    @State private var rotation: Double = 0
-
-    var body: some View {
-        Circle()
-            .trim(from: 0, to: 0.75)
-            .stroke(Color.accentColor.opacity(0.6),
-                    style: StrokeStyle(lineWidth: 3, lineCap: .round))
-            .frame(width: diameter, height: diameter)
-            .rotationEffect(.degrees(rotation - 90))
-            .onAppear {
-                withAnimation(.linear(duration: 1.0).repeatForever(autoreverses: false)) {
-                    rotation = 360
-                }
-            }
-    }
-}
-
-// MARK: - Searching text with shimmer
-
-private struct SearchingText: View {
-    // TimelineView(.animation) updates every display frame, giving us a reliable
-    // per-frame phase value without relying on SwiftUI interpolating @State into
-    // gradient stop positions (which it doesn't do reliably).
-    private static let cycleDuration: TimeInterval = 2.8
-
-    var body: some View {
-        TimelineView(.animation) { context in
-            let phase = shimmerPhase(at: context.date)
-            Text("Searching\nfor other devices\non the network...")
-                .font(.system(size: 30, weight: .bold))
-                .multilineTextAlignment(.leading)
-                .foregroundStyle(
-                    LinearGradient(
-                        stops: [
-                            .init(color: Color.secondary,              location: max(0, phase - 0.25)),
-                            .init(color: Color(UIColor.systemGray5),   location: phase),
-                            .init(color: Color.secondary,              location: min(1, phase + 0.25)),
-                        ],
-                        // ~45° oblique sweep: top-leading → bottom-trailing
-                        startPoint: UnitPoint(x: 0, y: 0.3),
-                        endPoint:   UnitPoint(x: 1, y: 0.7)
-                    )
-                )
-        }
-    }
-
-    private func shimmerPhase(at date: Date) -> CGFloat {
-        let t = date.timeIntervalSinceReferenceDate
-            .truncatingRemainder(dividingBy: Self.cycleDuration) / Self.cycleDuration
-        return CGFloat(t) * 1.6 - 0.3   // sweeps from -0.3 (off-left) to 1.3 (off-right)
-    }
-}
-
-// MARK: - Pulsing rings
-
-private struct PulsingRings: View {
-    @State private var animating = false
-    private let diameter: CGFloat = 128
-
-    var body: some View {
-        ZStack {
-            ForEach(0..<3, id: \.self) { i in
-                Circle()
-                    .fill(Color(red: 0.53, green: 0.71, blue: 0.96).opacity(0.25))
-                    .frame(width: diameter, height: diameter)
-                    .scaleEffect(animating ? 2.7 : 1)
-                    .opacity(animating ? 0 : 1)
-                    .animation(
-                        .easeOut(duration: 2.0)
-                            .repeatForever(autoreverses: false)
-                            .delay(Double(i) * 0.65),
-                        value: animating
-                    )
-            }
-        }
-        .onAppear { animating = true }
-    }
-}
-
-// MARK: - Shimmer
-
-private extension View {
-    func shimmer() -> some View { modifier(ShimmerModifier()) }
-}
-
-private struct ShimmerModifier: ViewModifier {
-    @State private var phase: CGFloat = -0.4
-
-    func body(content: Content) -> some View {
-        content.overlay {
-            LinearGradient(
-                stops: [
-                    .init(color: .clear,               location: phase - 0.15),
-                    .init(color: .white.opacity(0.55), location: phase),
-                    .init(color: .clear,               location: phase + 0.15),
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            .mask(content)
-            .allowsHitTesting(false)
-        }
-        .onAppear {
-            withAnimation(.linear(duration: 2.5).repeatForever(autoreverses: false)) {
-                phase = 1.4
-            }
-        }
-    }
-}
-
-// MARK: - ViewModel helper
-
-extension SearchViewModel {
-    // Peers split into rows of 2; odd final peer gets its own row (centered by the caller).
-    var peerRows: [[Peer]] {
-        stride(from: 0, to: discoveredPeers.count, by: 2).map { i in
-            Array(discoveredPeers[i..<min(i + 2, discoveredPeers.count)])
-        }
     }
 }
 
@@ -433,20 +205,13 @@ private func previewVM(peers: [Peer], states: [Peer: PeerConnectionState] = [:])
 }
 
 private let samplePeers: [Peer] = [
-    makePeer("🦙 Happy Llama"),
-    makePeer("🦒 Cunning Giraffe"),
-    makePeer("🐺 Puffy Wolf"),
-    makePeer("🐱 Sly Cat"),
-    makePeer("🦅 Swift Eagle"),
-    makePeer("🦋 Vivid Butterfly"),
-    makePeer("🌟 Radiant Star"),
-    makePeer("🌊 Crashing Wave"),
-    makePeer("🌙 Crescent Moon"),
-    makePeer("☄️ Blazing Comet"),
-    makePeer("🌺 Cherry Blossom"),
-    makePeer("🦩 Pink Flamingo"),
-    makePeer("🐙 Inky Octopus"),
-    makePeer("🦈 Silent Shark"),
+    makePeer("🦙 Happy Llama"),    makePeer("🦒 Cunning Giraffe"),
+    makePeer("🐺 Puffy Wolf"),     makePeer("🐱 Sly Cat"),
+    makePeer("🦅 Swift Eagle"),    makePeer("🦋 Vivid Butterfly"),
+    makePeer("🌟 Radiant Star"),   makePeer("🌊 Crashing Wave"),
+    makePeer("🌙 Crescent Moon"),  makePeer("☄️ Blazing Comet"),
+    makePeer("🌺 Cherry Blossom"), makePeer("🦩 Pink Flamingo"),
+    makePeer("🐙 Inky Octopus"),   makePeer("🦈 Silent Shark"),
     makePeer("🌵 Desert Cactus"),
 ]
 
@@ -491,7 +256,7 @@ private let samplePeers: [Peer] = [
     SearchView(viewModel: previewVM(peers: [p, samplePeers[1]], states: [p: .connecting]), namespace: ns)
 }
 
-#Preview("State: connected (with send button)") {
+#Preview("State: connected") {
     @Previewable @Namespace var ns
     let p0 = samplePeers[0]; let p1 = samplePeers[1]
     SearchView(viewModel: previewVM(peers: [p0, p1, samplePeers[2], samplePeers[3]],
