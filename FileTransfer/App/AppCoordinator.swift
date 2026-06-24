@@ -12,6 +12,10 @@ final class AppCoordinator {
     private let connectionHistory: any ConnectionHistoryStore
     private let profileStore: any UserProfileStore
 
+    /// The most recently saved profile, used to pre-fill the onboarding screen
+    /// when the user navigates back from the search screen.
+    var savedProfile: UserProfile? { profileStore.savedProfile }
+
     init(
         service: any NearbySessionService = MultipeerNearbyService(),
         identityStore: any DeviceIdentityStore = UserDefaultsDeviceIdentityStore(),

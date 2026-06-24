@@ -7,6 +7,7 @@ struct SearchView: View {
     @State private var showRings = false
     @State private var showText = false
     @State private var showDataExchange = false
+    @State private var didBackground = false  // tracks that we've been in background
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -76,11 +77,27 @@ struct SearchView: View {
             withAnimation(.easeIn(duration: 0.4).delay(0.45)) { showText = true }
         }
         .onDisappear { viewModel.stop() }
-        .onChange(of: scenePhase) { old, new in
-            // old == .background ensures this fires only on foreground re-entry,
-            // not on the initial active transition at launch.
-            if old == .background && new == .active {
+        .onChange(of: scenePhase) { _, new in
+            switch new {
+            case .background:
+                // Remember that we went to background so we can act on return.
+                // scenePhase never jumps directly background→active; it passes
+                // through .inactive, so old==.background never holds on .active.
+                didBackground = true
+
+            case .active where didBackground:
+                didBackground = false
+                // 1. Invalidate connections and restart discovery.
                 viewModel.handleForeground()
+                // 2. Restart entry animations: remove the views first so their
+                //    @State resets and onAppear fires again on re-insertion.
+                showRings = false
+                showText  = false
+                withAnimation(.easeIn(duration: 0.5).delay(0.25)) { showRings = true }
+                withAnimation(.easeIn(duration: 0.4).delay(0.45)) { showText  = true }
+
+            default:
+                break
             }
         }
     }

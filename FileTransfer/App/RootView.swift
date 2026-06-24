@@ -11,7 +11,11 @@ struct RootView: View {
                     .transition(.opacity)
                     .zIndex(1)
             } else {
-                OnboardingView(onProceed: coordinator.proceedFromOnboarding, namespace: hero)
+                OnboardingView(
+                    onProceed: coordinator.proceedFromOnboarding,
+                    namespace: hero,
+                    initialProfile: coordinator.savedProfile
+                )
                     .transition(.opacity)
                     .zIndex(0)
             }

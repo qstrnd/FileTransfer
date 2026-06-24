@@ -15,10 +15,20 @@ final class OnboardingViewModel {
 
     private let onProceed: (String, String) -> Void
 
-    init(onProceed: @escaping (String, String) -> Void) {
-        let info = DeviceInfo.current()
-        self.emoji = info.emoji
-        self.name = info.name
+    /// - Parameter initialProfile: When provided (e.g. returning from SearchView),
+    ///   the onboarding opens pre-filled with the user's existing profile instead
+    ///   of the device defaults.
+    init(onProceed: @escaping (String, String) -> Void, initialProfile: UserProfile? = nil) {
+        if let profile = initialProfile {
+            self.emoji = profile.emoji
+            self.name = profile.name
+            self.source = .custom
+        } else {
+            let info = DeviceInfo.current()
+            self.emoji = info.emoji
+            self.name = info.name
+            self.source = .device
+        }
         self.onProceed = onProceed
     }
 

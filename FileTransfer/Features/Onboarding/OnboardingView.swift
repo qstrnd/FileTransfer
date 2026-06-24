@@ -81,8 +81,8 @@ struct OnboardingView: View {
     @State private var viewModel: OnboardingViewModel
     var namespace: Namespace.ID
 
-    init(onProceed: @escaping (String, String) -> Void, namespace: Namespace.ID) {
-        _viewModel = State(initialValue: OnboardingViewModel(onProceed: onProceed))
+    init(onProceed: @escaping (String, String) -> Void, namespace: Namespace.ID, initialProfile: UserProfile? = nil) {
+        _viewModel = State(initialValue: OnboardingViewModel(onProceed: onProceed, initialProfile: initialProfile))
         self.namespace = namespace
     }
 
