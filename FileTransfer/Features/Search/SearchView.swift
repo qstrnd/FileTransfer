@@ -61,7 +61,9 @@ struct SearchView: View {
             "Connection Request",
             isPresented: Binding(
                 get: { viewModel.pendingInvitationFrom != nil },
-                set: { if !$0 { viewModel.declineInvitation() } }
+                // No implicit decline on programmatic dismiss (e.g. timeout);
+                // only the explicit button actions should call declineInvitation().
+                set: { _ in }
             ),
             presenting: viewModel.pendingInvitationFrom
         ) { peer in

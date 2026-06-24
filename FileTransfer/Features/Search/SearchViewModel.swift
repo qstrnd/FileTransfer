@@ -99,10 +99,10 @@ final class SearchViewModel {
 
     func acceptInvitation() {
         log.info("acceptInvitation — from=\(self.pendingInvitationFrom?.displayName ?? "nil", privacy: .public)")
-        if let peer = pendingInvitationFrom {
-            guard let next = (peerStates[peer] ?? .idle).applying(.connectionAccepted) else { return }
-            peerStates[peer] = next
-        }
+        guard let peer = pendingInvitationFrom else { return }
+        // The receiving side never went through .connecting (they didn't initiate),
+        // so the state machine doesn't apply here — set .connected directly.
+        withAnimation { peerStates[peer] = .connected }
         service.acceptInvitation()
         pendingInvitationFrom = nil
     }
@@ -132,10 +132,17 @@ extension SearchViewModel: NearbySessionServiceDelegate {
     }
 
     func didConnect(peer: Peer) {
-        let current = peerStates[peer] ?? .connecting
-        log.info("didConnect — \(peer.displayName, privacy: .public) currentState=\(String(describing: current), privacy: .public)")
+        let preState = peerStates[peer]
+        log.info("didConnect — \(peer.displayName, privacy: .public) currentState=\(String(describing: preState), privacy: .public)")
+        if preState == .connected {
+            // Receiving side already set .connected in acceptInvitation; just record history.
+            connectionHistory.record(peer: peer)
+            log.debug("didConnect — already connected (receiving side), history updated")
+            return
+        }
+        let current = preState ?? .connecting
         guard let next = current.applying(.connectionAccepted) else {
-            log.warning("didConnect — invalid transition from \(String(describing: current), privacy: .public)")
+            log.warning("didConnect — unexpected transition from \(String(describing: current), privacy: .public)")
             return
         }
         withAnimation { peerStates[peer] = next }

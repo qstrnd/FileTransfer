@@ -70,11 +70,15 @@ final class MultipeerNearbyService: NSObject, NearbySessionService {
 
     func disconnect(from peer: Peer) {
         MultipeerNearbyService.log.info("disconnect — severing session for \(peer.displayName, privacy: .public) (affects all peers — MPC limitation)")
-        // MCSession has no per-peer disconnect; disconnect() severs all.
+        // MCSession has no per-peer disconnect; disconnect() severs all active peers.
         // The remote side receives didChange(.notConnected) for our peerID.
+        //
+        // Intentionally do NOT clear peerIDMap / peerDeviceIDMap here.
+        // The browser continues running and the peer stays in the map, so
+        // a subsequent connect(to:) can immediately re-invite them without
+        // waiting for another foundPeer callback (which may never fire if
+        // the peer is still advertising nearby and lostPeer never triggered).
         session?.disconnect()
-        peerIDMap = [:]
-        peerDeviceIDMap = [:]
     }
 
     func send(text: String, to peer: Peer) {
@@ -115,7 +119,10 @@ extension MultipeerNearbyService: MCSessionDelegate {
             @unknown default:   "unknown"
         }
         MultipeerNearbyService.log.info("session didChange peer=\(peerID.displayName, privacy: .public) → \(label, privacy: .public)")
-        if state == .notConnected { peerIDMap.removeValue(forKey: peer.id) }
+        // peerIDMap / peerDeviceIDMap are managed exclusively by the browser
+        // callbacks (foundPeer adds, lostPeer removes). A session disconnect
+        // does not mean the peer is undiscoverable — they are still nearby and
+        // can be re-invited. Removing here was preventing reconnection.
         Task { @MainActor [weak self] in
             switch state {
             case .connected:    self?.delegate?.didConnect(peer: peer)
