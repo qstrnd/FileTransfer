@@ -2,70 +2,98 @@
 
 ## Structure
 
-This project is organised by **app layer** (horizontal) and **feature/screen** (vertical). Every screen is a self-contained module under `Features/`.
-
 ```
 FileTransfer/
-├── App/                            # Entry point & navigation
-│   ├── AppCoordinator.swift        # Owns shared service; drives screen transitions
-│   └── RootView.swift              # Observes coordinator; renders Setup or Transfer
+├── App/                          # Entry point & navigation
+│   ├── AppCoordinator.swift      # Owns service; drives screen transitions
+│   └── RootView.swift            # Switches screens based on coordinator state
 │
-├── Core/                           # Shared infrastructure, no UI
-│   ├── Domain/
-│   │   ├── Peer.swift              # Entity
-│   │   ├── TransferMessage.swift   # Entity
-│   │   └── NearbySessionService.swift  # Protocol + delegate protocol
-│   └── Data/
-│       └── MultipeerNearbyService.swift  # MCSession implementation
+├── Core/                         # Shared infrastructure — no UI, no feature logic
+│   ├── Domain/                   # Entities, service protocols, domain types
+│   │   ├── Peer.swift
+│   │   ├── TransferMessage.swift
+│   │   ├── NearbySessionService.swift  # Protocol + delegate
+│   │   ├── NameGenerator.swift
+│   │   └── DeviceInfo.swift
+│   └── Data/                     # Concrete implementations of domain protocols
+│       └── MultipeerNearbyService.swift
 │
-└── Features/
-    ├── Setup/
-    │   └── Presentation/
-    │       ├── SetupViewModel.swift  # Owns name/emoji state; calls onStart closure
-    │       └── SetupView.swift       # Init takes onStart: (String) -> Void
-    └── Transfer/
-        └── Presentation/
-            ├── TransferViewModel.swift  # NearbySessionServiceDelegate; calls onStop
-            └── TransferView.swift
+└── Features/                     # One folder per screen / bounded context
+    ├── Onboarding/               # MVVM — files go directly here, no subfolders
+    │   ├── OnboardingView.swift
+    │   └── OnboardingViewModel.swift
+    ├── Search/                   # Views may be split into focused sub-views
+    │   ├── SearchView.swift
+    │   ├── SearchViewModel.swift
+    │   ├── PeerCell.swift        # Sub-view
+    │   ├── PeerConnectionState.swift  # Feature-scoped type
+    │   ├── SearchingText.swift   # Sub-view
+    │   └── PulsingRings.swift    # Sub-view
+    └── …
 ```
+
+### Feature module conventions
+
+Each feature folder is a self-contained **MVVM module**:
+
+- **ViewModel** — `@Observable` class; owns business logic and state. Receives dependencies via `init` (closures or protocols). Never imports another feature.
+- **View** — SwiftUI `View`. Talks only to its ViewModel. May be split into focused sub-views inside the same folder (e.g. `PeerCell`, `SearchingText`).
+- **Sub-ViewModels** — add when a sub-view has non-trivial state; keep them scoped to the same folder.
+- **Feature-scoped types** — enums, value types, extensions used only within the feature live in the same folder (e.g. `PeerConnectionState`).
+
+No `Presentation/`, `Domain/`, or `Data/` subfolders inside a feature. The feature folder *is* the module boundary.
+
+## Clean architecture layers
+
+| Layer | Location | What lives here |
+|---|---|---|
+| **Domain** | `Core/Domain/` | Entities (`Peer`, `TransferMessage`), service protocols, pure business logic |
+| **Infrastructure** | `Core/Data/` | Concrete implementations of domain protocols (MCSession adapter, etc.) |
+| **Feature** | `Features/<Name>/` | Screen-specific ViewModels, Views, sub-views, and feature-scoped types |
+| **App** | `App/` | Navigation coordinator, root view |
+
+If the app grows to need explicit **repositories** or **use cases**, add them in `Core/Domain/` (protocol) and `Core/Data/` (implementation). Features call service protocols — they never reach into `Core/Data/` directly.
 
 ## State management
 
-All ViewModels and `AppCoordinator` use the **Observation framework** (`@Observable` macro, iOS 17+). Do not use `ObservableObject` / `@Published`.
+All ViewModels and `AppCoordinator` use the **Observation framework** (`@Observable`, iOS 17+). Never use `ObservableObject` / `@Published`.
 
 | Scenario | Property wrapper |
 |---|---|
-| View **owns** the object (coordinator, setup VM) | `@State` |
+| View **owns** the object (coordinator, onboarding VM) | `@State` |
 | View **receives** the object from outside | plain `var` (no wrapper) |
-| Need a `Binding` to an `@Observable` property from `@State` | `$state.property` |
-| Need a `Binding` to an externally-received `@Observable` | `@Bindable var` |
+| Binding to an `@Observable` property from `@State` | `$state.property` |
+| Binding to an externally-received `@Observable` | `@Bindable var` |
 
 ## Language
 
-Use **Swift 6.0** strict concurrency throughout. All types are `@MainActor` by default (enforced via `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` in build settings).
+Use **Swift 6.0** strict concurrency throughout. All types are `@MainActor` by default (`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`).
 
-- **Always prefer modern concurrency** — `async`/`await`, `AsyncStream`, `Actor`, `Task`, and structured concurrency. Never use `DispatchQueue`, `OperationQueue`, or completion-handler APIs when an async alternative exists.
+- **Always prefer modern concurrency** — `async`/`await`, `AsyncStream`, `Actor`, `Task`, structured concurrency. Never use `DispatchQueue`, `OperationQueue`, or completion-handler APIs when an async alternative exists.
 - Cross-actor calls must use `await`.
 - UIKit delegate protocols are `@MainActor` in iOS 26; implement them as plain methods on an `@MainActor` class — no `nonisolated` needed.
-- `nonisolated` is reserved for pure, stateless functions (e.g. `isValidEmoji`) that must be callable from any isolation context. If you find yourself writing `nonisolated` + a hop back to MainActor, reconsider the design.
-- Use `Task { @MainActor in … }` only when you need to defer work past the current synchronous scope (e.g. calling `becomeFirstResponder` after a layout pass). Do not use it as a substitute for proper `async`/`await` call chains.
+- `nonisolated` is reserved for pure, stateless functions (e.g. `isValidEmoji`) callable from any isolation context.
+- Use `Task { @MainActor in … }` only to defer past the current synchronous scope (e.g. `becomeFirstResponder` after a layout pass). Do not use it as a substitute for proper `async`/`await` call chains.
 
 ## Git
 
-Commit at the end of each meaningful, self-contained chunk of work — a new feature module, a refactor, a migration. Do not commit partial or broken states. Each commit message should say *why*, not just *what*.
+Commit at the end of each meaningful, self-contained chunk of work. Do not commit partial or broken states. Each commit message should say *why*, not just *what*.
 
 ## Rules
 
 ### Adding a new screen
-1. Create `Features/<ScreenName>/Presentation/` with a `ViewModel` and a `View`.
-2. The ViewModel receives any shared service or state via `init` parameters (closures or protocols). It does **not** import other feature modules.
-3. Register the screen transition in `AppCoordinator` and wire it in `RootView`.
+1. Create `Features/<ScreenName>/` and add a `View` + `ViewModel` file.
+2. The ViewModel receives dependencies via `init` (closures or protocols). It never imports other features.
+3. Register the transition in `AppCoordinator`; wire it in `RootView`.
+4. Split into sub-views as needed — keep all files in the same feature folder.
 
-### Shared domain objects
-Entities and service protocols live in `Core/Domain/`. Concrete implementations (network, persistence) live in `Core/Data/`. Features import nothing from each other — only from `Core`.
+### Adding a shared capability
+- **Entity or protocol** → `Core/Domain/`
+- **Concrete implementation** → `Core/Data/`
+- Features depend on the protocol, never on the implementation.
 
 ### Navigation
-`AppCoordinator` is the single source of truth for which screen is active. It publishes an optional ViewModel (e.g. `transferViewModel: TransferViewModel?`). `RootView` switches on that optional. A feature signals "I'm done" by calling the `onStop`/`onDismiss` closure it received at init — it never pushes navigation itself.
+`AppCoordinator` is the single source of truth for which screen is active. It holds an optional ViewModel (e.g. `searchViewModel: SearchViewModel?`). `RootView` switches on that optional. Features signal completion via `onDismiss`/`onStop` closures — they never push navigation themselves.
 
 ### Service lifetime
-`AppCoordinator` owns the `NearbySessionService` instance for the entire app session. It passes the service to feature ViewModels on construction. When a feature stops, the coordinator calls `service.stop()` (or the ViewModel does via its `stop()` method which also fires `onStop`).
+`AppCoordinator` owns the `NearbySessionService` for the entire app session, passing it to feature ViewModels on construction. When a feature stops, it calls `service.stop()` and clears the service's delegate to avoid retain cycles.
