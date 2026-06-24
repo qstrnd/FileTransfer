@@ -4,6 +4,7 @@ import MultipeerConnectivity
 @MainActor
 final class MultipeerNearbyService: NSObject, NearbySessionService {
     private static let serviceType = "ft-demo"
+    nonisolated private static let discoveryDeviceIDKey: String = "deviceID"
 
     weak var delegate: (any NearbySessionServiceDelegate)?
 
@@ -14,11 +15,14 @@ final class MultipeerNearbyService: NSObject, NearbySessionService {
 
     // Written from nonisolated MC callbacks, read from @MainActor methods.
     // nonisolated(unsafe) documents that we own the safety guarantee: writes
-    // happen before the @MainActor task that triggers the corresponding read.
+    // happen-before the @MainActor task that reads them.
     nonisolated(unsafe) private var invitationHandler: ((Bool, MCSession?) -> Void)?
+    /// Maps displayName → MCPeerID for outgoing connect/send calls.
     nonisolated(unsafe) private var peerIDMap: [String: MCPeerID] = [:]
+    /// Maps displayName → UUID parsed from MPC discoveryInfo.
+    nonisolated(unsafe) private var peerDeviceIDMap: [String: UUID] = [:]
 
-    func start(displayName: String) {
+    func start(displayName: String, deviceID: UUID) {
         let peerID = MCPeerID(displayName: displayName)
         myPeerID = peerID
 
@@ -26,7 +30,9 @@ final class MultipeerNearbyService: NSObject, NearbySessionService {
         newSession.delegate = self
         session = newSession
 
-        let newAdvertiser = MCNearbyServiceAdvertiser(peer: peerID, discoveryInfo: nil, serviceType: Self.serviceType)
+        // Broadcast our UUID so remote peers can match us against their history.
+        let info = [Self.discoveryDeviceIDKey: deviceID.uuidString]
+        let newAdvertiser = MCNearbyServiceAdvertiser(peer: peerID, discoveryInfo: info, serviceType: Self.serviceType)
         newAdvertiser.delegate = self
         newAdvertiser.startAdvertisingPeer()
         advertiser = newAdvertiser
@@ -47,6 +53,7 @@ final class MultipeerNearbyService: NSObject, NearbySessionService {
         myPeerID = nil
         invitationHandler = nil
         peerIDMap = [:]
+        peerDeviceIDMap = [:]
     }
 
     func connect(to peer: Peer) {
@@ -70,20 +77,28 @@ final class MultipeerNearbyService: NSObject, NearbySessionService {
         invitationHandler?(false, nil)
         invitationHandler = nil
     }
+
+    // MARK: - Private helpers
+
+    nonisolated private func peer(for peerID: MCPeerID) -> Peer {
+        Peer(displayName: peerID.displayName, deviceID: peerDeviceIDMap[peerID.displayName])
+    }
 }
+
+// MARK: - MCSessionDelegate
 
 extension MultipeerNearbyService: MCSessionDelegate {
     nonisolated func session(_ session: MCSession, peer peerID: MCPeerID, didChange state: MCSessionState) {
-        let peer = Peer(displayName: peerID.displayName)
+        let peer = peer(for: peerID)
         if state == .notConnected {
             peerIDMap.removeValue(forKey: peer.id)
         }
         Task { @MainActor [weak self] in
             guard let self else { return }
             switch state {
-            case .connected: delegate?.didConnect(peer: peer)
+            case .connected:    delegate?.didConnect(peer: peer)
             case .notConnected: delegate?.didDisconnect(peer: peer)
-            default: break
+            default:            break
             }
         }
     }
@@ -101,9 +116,11 @@ extension MultipeerNearbyService: MCSessionDelegate {
     nonisolated func session(_ session: MCSession, didFinishReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, at localURL: URL?, withError error: Error?) {}
 }
 
+// MARK: - MCNearbyServiceAdvertiserDelegate
+
 extension MultipeerNearbyService: MCNearbyServiceAdvertiserDelegate {
     nonisolated func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
-        let peer = Peer(displayName: peerID.displayName)
+        let peer = peer(for: peerID)
         self.invitationHandler = invitationHandler
         Task { @MainActor [weak self] in
             self?.delegate?.didReceiveInvitation(from: peer)
@@ -115,18 +132,24 @@ extension MultipeerNearbyService: MCNearbyServiceAdvertiserDelegate {
     }
 }
 
+// MARK: - MCNearbyServiceBrowserDelegate
+
 extension MultipeerNearbyService: MCNearbyServiceBrowserDelegate {
     nonisolated func browser(_ browser: MCNearbyServiceBrowser, foundPeer peerID: MCPeerID, withDiscoveryInfo info: [String: String]?) {
-        let peer = Peer(displayName: peerID.displayName)
-        peerIDMap[peer.id] = peerID
+        // Parse the remote device's UUID from discoveryInfo if present.
+        let deviceID = info?[MultipeerNearbyService.discoveryDeviceIDKey].flatMap(UUID.init(uuidString:))
+        peerIDMap[peerID.displayName] = peerID
+        if let deviceID { peerDeviceIDMap[peerID.displayName] = deviceID }
+        let peer = Peer(displayName: peerID.displayName, deviceID: deviceID)
         Task { @MainActor [weak self] in
             self?.delegate?.didDiscover(peer: peer)
         }
     }
 
     nonisolated func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
-        let peer = Peer(displayName: peerID.displayName)
-        peerIDMap.removeValue(forKey: peer.id)
+        let peer = peer(for: peerID)
+        peerIDMap.removeValue(forKey: peerID.displayName)
+        peerDeviceIDMap.removeValue(forKey: peerID.displayName)
         Task { @MainActor [weak self] in
             self?.delegate?.didLose(peer: peer)
         }

@@ -1,3 +1,5 @@
+import Foundation
+
 @MainActor
 protocol NearbySessionServiceDelegate: AnyObject {
     func didDiscover(peer: Peer)
@@ -11,7 +13,10 @@ protocol NearbySessionServiceDelegate: AnyObject {
 @MainActor
 protocol NearbySessionService: AnyObject {
     var delegate: (any NearbySessionServiceDelegate)? { get set }
-    func start(displayName: String)
+    /// Start advertising and browsing.
+    /// `deviceID` is broadcast via MPC discoveryInfo so remote peers can identify
+    /// this device for connection-history lookup and future auto-reconnect.
+    func start(displayName: String, deviceID: UUID)
     func stop()
     func connect(to peer: Peer)
     func send(text: String, to peer: Peer)

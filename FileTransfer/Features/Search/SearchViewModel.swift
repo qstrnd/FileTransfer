@@ -7,23 +7,31 @@ final class SearchViewModel {
     let emoji: String
     let name: String
 
-    // Peers in discovery order; animated when entries are added/removed.
     var discoveredPeers: [Peer] = []
-    // Per-peer connection state machine.
     var peerStates: [Peer: PeerConnectionState] = [:]
-    // Non-nil while an incoming invitation is waiting for the user's answer.
     var pendingInvitationFrom: Peer? = nil
 
     var connectedPeers: [Peer] { peerStates.filter { $0.value == .connected }.map(\.key) }
     var hasConnectedPeers: Bool { !connectedPeers.isEmpty }
 
+    private let deviceID: UUID
     private let service: any NearbySessionService
+    private let connectionHistory: any ConnectionHistoryStore
     private let onBack: () -> Void
 
-    init(emoji: String, name: String, service: any NearbySessionService, onBack: @escaping () -> Void) {
+    init(
+        emoji: String,
+        name: String,
+        deviceID: UUID,
+        service: any NearbySessionService,
+        connectionHistory: any ConnectionHistoryStore,
+        onBack: @escaping () -> Void
+    ) {
         self.emoji = emoji
         self.name = name
+        self.deviceID = deviceID
         self.service = service
+        self.connectionHistory = connectionHistory
         self.onBack = onBack
     }
 
@@ -31,7 +39,7 @@ final class SearchViewModel {
 
     func start() {
         service.delegate = self
-        service.start(displayName: "\(emoji) \(name)")
+        service.start(displayName: "\(emoji) \(name)", deviceID: deviceID)
     }
 
     func stop() {
@@ -46,33 +54,37 @@ final class SearchViewModel {
 
     // MARK: - Actions
 
+    /// Route `initiateConnection` through `ConnectionPolicy` so business rules
+    /// are the single source of truth for which states allow (re-)connecting.
     func connect(to peer: Peer) {
-        switch peerStates[peer] ?? .idle {
-        case .connected:
-            disconnect(from: peer)
-        case .idle, .rejected:
-            peerStates[peer] = .connecting
-            service.connect(to: peer)
-            // Failsafe: MPC doesn't always fire didDisconnect for silent rejections.
-            // Reset to idle after the invitation timeout so the user can try again.
-            Task {
-                try? await Task.sleep(for: .seconds(10))
-                if peerStates[peer] == .connecting {
-                    withAnimation(.spring(duration: 0.4)) { peerStates[peer] = .idle }
-                }
+        let current = peerStates[peer] ?? .idle
+        guard ConnectionPolicy.canInitiate(from: current),
+              let next = current.applying(.initiateConnection) else { return }
+
+        peerStates[peer] = next
+        service.connect(to: peer)
+
+        // Failsafe: MPC does not always fire didDisconnect for silent rejections.
+        Task {
+            try? await Task.sleep(for: .seconds(10))
+            if peerStates[peer] == .connecting {
+                withAnimation(.spring(duration: 0.4)) { peerStates[peer] = .idle }
             }
-        case .connecting:
-            break
         }
     }
 
     func disconnect(from peer: Peer) {
-        withAnimation(.spring(duration: 0.4)) { peerStates[peer] = .idle }
+        guard let next = (peerStates[peer] ?? .idle).applying(.initiateDisconnection) else { return }
+        withAnimation(.spring(duration: 0.4)) { peerStates[peer] = next }
+        // Note: MCSession has no per-peer disconnect API. Calling session.disconnect()
+        // disconnects all peers; instead we rely on the state update here and let
+        // MPC fire didDisconnect on the remote side when the session is eventually torn down.
     }
 
     func acceptInvitation() {
         if let peer = pendingInvitationFrom {
-            peerStates[peer] = .connected
+            guard let next = (peerStates[peer] ?? .idle).applying(.connectionAccepted) else { return }
+            peerStates[peer] = next
         }
         service.acceptInvitation()
         pendingInvitationFrom = nil
@@ -100,20 +112,25 @@ extension SearchViewModel: NearbySessionServiceDelegate {
     }
 
     func didConnect(peer: Peer) {
-        withAnimation { peerStates[peer] = .connected }
+        guard let next = (peerStates[peer] ?? .connecting).applying(.connectionAccepted) else { return }
+        withAnimation { peerStates[peer] = next }
+        // Rule 5: persist the connection so the two devices qualify for future auto-reconnect.
+        connectionHistory.record(peer: peer)
     }
 
     func didDisconnect(peer: Peer) {
-        let wasConnecting = peerStates[peer] == .connecting
-        withAnimation {
-            peerStates[peer] = wasConnecting ? .rejected : .idle
-        }
-        guard wasConnecting else { return }
-        // Reset to idle after the rejection animation plays so the user can try again.
-        Task {
-            try? await Task.sleep(for: .seconds(3))
-            withAnimation(.spring(duration: 0.4)) {
-                if peerStates[peer] == .rejected { peerStates[peer] = .idle }
+        let current = peerStates[peer] ?? .idle
+        // If we were connecting and the peer disconnected, they declined our invitation.
+        let event: ConnectionEvent = (current == .connecting) ? .connectionDeclined : .peerDisconnected
+        guard let next = current.applying(event) else { return }
+        withAnimation { peerStates[peer] = next }
+
+        if next == .rejected {
+            Task {
+                try? await Task.sleep(for: .seconds(3))
+                withAnimation(.spring(duration: 0.4)) {
+                    if peerStates[peer] == .rejected { peerStates[peer] = .idle }
+                }
             }
         }
     }
@@ -128,7 +145,6 @@ extension SearchViewModel: NearbySessionServiceDelegate {
 // MARK: - View helpers
 
 extension SearchViewModel {
-    /// Peers split into rows of 2; an odd final peer gets its own row (centered by the caller).
     var peerRows: [[Peer]] {
         stride(from: 0, to: discoveredPeers.count, by: 2).map { i in
             Array(discoveredPeers[i..<min(i + 2, discoveredPeers.count)])

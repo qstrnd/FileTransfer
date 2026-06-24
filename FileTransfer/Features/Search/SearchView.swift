@@ -186,7 +186,7 @@ struct SearchView: View {
 @MainActor
 private final class PreviewNearbyService: NearbySessionService {
     var delegate: (any NearbySessionServiceDelegate)?
-    func start(displayName: String) {}
+    func start(displayName: String, deviceID: UUID) {}
     func stop() {}
     func connect(to peer: Peer) {}
     func send(text: String, to peer: Peer) {}
@@ -197,8 +197,10 @@ private final class PreviewNearbyService: NearbySessionService {
 private func makePeer(_ name: String) -> Peer { Peer(displayName: name) }
 
 private func previewVM(peers: [Peer], states: [Peer: PeerConnectionState] = [:]) -> SearchViewModel {
-    let vm = SearchViewModel(emoji: "🐟", name: "Fantastic Fish",
-                             service: PreviewNearbyService(), onBack: {})
+    let vm = SearchViewModel(emoji: "🐟", name: "Fantastic Fish", deviceID: UUID(),
+                             service: PreviewNearbyService(),
+                             connectionHistory: InMemoryConnectionHistoryStore(),
+                             onBack: {})
     vm.discoveredPeers = peers
     vm.peerStates = states
     return vm
