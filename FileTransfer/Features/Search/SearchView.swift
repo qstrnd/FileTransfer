@@ -7,6 +7,7 @@ struct SearchView: View {
     @State private var showRings = false
     @State private var showText = false
     @State private var showDataExchange = false
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         ZStack {
@@ -75,6 +76,13 @@ struct SearchView: View {
             withAnimation(.easeIn(duration: 0.4).delay(0.45)) { showText = true }
         }
         .onDisappear { viewModel.stop() }
+        .onChange(of: scenePhase) { old, new in
+            // old == .background ensures this fires only on foreground re-entry,
+            // not on the initial active transition at launch.
+            if old == .background && new == .active {
+                viewModel.handleForeground()
+            }
+        }
     }
 
     // MARK: - Hero

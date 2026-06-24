@@ -54,6 +54,21 @@ final class SearchViewModel {
         service.stop()
     }
 
+    /// Called when the app returns to the foreground. Tears down the current
+    /// MPC session (disconnecting all peers) and restarts advertising/browsing
+    /// so discovery begins fresh without stale peer state.
+    func handleForeground() {
+        log.info("handleForeground — resetting session")
+        service.stop()
+        withAnimation {
+            discoveredPeers = []
+            peerStates = [:]
+            pendingInvitationFrom = nil
+            expiredInvitationFrom = nil
+        }
+        service.start(displayName: "\(emoji) \(name)", deviceID: deviceID)
+    }
+
     func goBack() {
         log.info("goBack")
         stop()
