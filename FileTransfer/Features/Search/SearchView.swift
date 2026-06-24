@@ -57,20 +57,14 @@ struct SearchView: View {
             .animation(.easeInOut(duration: 0.35), value: viewModel.discoveredPeers.isEmpty)
             .animation(.spring(duration: 0.35), value: viewModel.expiredInvitationFrom == nil)
         }
-        .alert(
-            "Connection Request",
-            isPresented: Binding(
-                get: { viewModel.pendingInvitationFrom != nil },
-                // No implicit decline on programmatic dismiss (e.g. timeout);
-                // only the explicit button actions should call declineInvitation().
-                set: { _ in }
-            ),
-            presenting: viewModel.pendingInvitationFrom
-        ) { peer in
-            Button("Accept") { viewModel.acceptInvitation() }
-            Button("Decline", role: .destructive) { viewModel.declineInvitation() }
-        } message: { peer in
-            Text("\(peer.nameComponent) wants to connect")
+        .overlay {
+            // InvitationAlert is always present; it controls its own layer transitions
+            // internally so the backdrop and card can animate independently.
+            InvitationAlert(
+                peer: viewModel.pendingInvitationFrom,
+                onAccept: { viewModel.acceptInvitation() },
+                onDecline: { viewModel.declineInvitation() }
+            )
         }
         .fullScreenCover(isPresented: $showDataExchange) {
             DataExchangeView()

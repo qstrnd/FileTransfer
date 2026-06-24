@@ -7,11 +7,15 @@ struct PeerCell: View {
     let state: PeerConnectionState
     let onTap: () -> Void
 
-    @State private var shakeOffset: CGFloat = 0
+    // Both are driven by local state so they can fade independently
+    // of the PeerConnectionState value — the cell stays in .rejected
+    // visually for as long as the fade takes, even after state → .idle.
     @State private var lockOpacity: Double = 0
+    @State private var rejectedRingOpacity: Double = 0
 
     private let circleSize: CGFloat = 100
     private let ringLineWidth: CGFloat = 3
+    private let rejectedFadeDuration: TimeInterval = 0.5
 
     var body: some View {
         Button(action: onTap) {
@@ -25,46 +29,44 @@ struct PeerCell: View {
                     Text(peer.emojiComponent)
                         .font(.system(size: 44))
 
-                    if state == .rejected {
-                        Image(systemName: "lock.fill")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .padding(6)
-                            .background(Color.red.opacity(0.85), in: Circle())
-                            .opacity(lockOpacity)
-                    }
+                    // Lock icon — always in the hierarchy so opacity can animate
+                    // freely; only visible when lockOpacity > 0.
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(6)
+                        .background(Color.red.opacity(0.85), in: Circle())
+                        .opacity(lockOpacity)
 
-                    // Rings — inline if/else so SwiftUI can apply .transition(.opacity)
-                    // when states enter or leave, giving smooth fade-in/out.
+                    // Active-state rings — each embeds its own transition animation
+                    // so the ZStack needs no implicit .animation(value:) modifier.
+                    // This keeps rejectedRingOpacity / lockOpacity free to animate
+                    // at their own duration via withAnimation in onChange.
                     if state == .connecting {
                         SpinnerRing(diameter: circleSize - ringLineWidth)
-                            .transition(.opacity)
+                            .transition(.opacity.animation(.easeInOut(duration: 0.35)))
                     } else if state == .connected {
                         Circle()
                             .strokeBorder(Color.accentColor, lineWidth: ringLineWidth)
                             .frame(width: circleSize, height: circleSize)
-                            .transition(.opacity)
-                    } else if state == .rejected {
-                        Circle()
-                            .strokeBorder(Color.red.opacity(0.7), lineWidth: 2)
-                            .frame(width: circleSize, height: circleSize)
-                            .transition(.opacity)
+                            .transition(.opacity.animation(.easeInOut(duration: 0.35)))
                     }
+
+                    // Rejected ring — opacity-driven; animates via withAnimation
+                    // in onChange so it's unaffected by any implicit animation.
+                    Circle()
+                        .strokeBorder(Color.red.opacity(0.7), lineWidth: 2)
+                        .frame(width: circleSize, height: circleSize)
+                        .opacity(rejectedRingOpacity)
                 }
-                // Implicit animation on all state-driven view changes within the ZStack,
-                // including ring insert/remove transitions. Ensures the rejected ring
-                // fades out even when the state change arrives from an async Task where
-                // the withAnimation context has already exited.
-                .animation(.easeInOut(duration: 0.4), value: state)
-                .offset(x: shakeOffset)
-                // Badge overlay: positioned outside the ZStack frame, does not
-                // affect the cell's layout size or sibling positions.
                 .overlay(alignment: .topLeading) {
                     if state == .connected {
                         disconnectBadge
-                            // Shift so the badge straddles the top-left edge of the circle.
                             .offset(x: -4, y: -4)
-                            .transition(.scale(scale: 0.5).combined(with: .opacity))
+                            .transition(
+                                .scale(scale: 0.5).combined(with: .opacity)
+                                .animation(.spring(duration: 0.3))
+                            )
                     }
                 }
 
@@ -76,15 +78,29 @@ struct PeerCell: View {
         }
         .buttonStyle(.plain)
         .disabled(state == .connecting)
-        .onChange(of: state) { _, new in
-            if new == .rejected { playRejectedAnimation() }
+        .onChange(of: state) { old, new in
+            switch new {
+            case .rejected:
+                playRejectedAnimation()  // handles ring + lock fade-in
+            default:
+                if old == .rejected {
+                    // Defer past the ViewModel's withAnimation(.spring) transaction
+                    // that triggered this state change. Without the Task, onChange
+                    // fires synchronously inside that transaction and the spring
+                    // animation wins over withAnimation(.easeOut) here.
+                    Task { @MainActor in
+                        withAnimation(.easeOut(duration: rejectedFadeDuration)) {
+                            rejectedRingOpacity = 0
+                            lockOpacity = 0
+                        }
+                    }
+                }
+            }
         }
     }
 
     // MARK: - Disconnect badge
 
-    /// iOS home-screen style minus badge. Tap area is 36×36 so it's easy to hit;
-    /// the visual circle is 26 pt, centred within the larger tap region.
     private var disconnectBadge: some View {
         Button(action: onTap) {
             ZStack {
@@ -98,24 +114,16 @@ struct PeerCell: View {
             }
         }
         .buttonStyle(.plain)
-        // 36×36 frame creates the hit area without growing the badge visually.
         .frame(width: 36, height: 36)
     }
 
     // MARK: - Animations
 
     private func playRejectedAnimation() {
-        Task {
-            let offsets: [CGFloat] = [10, -10, 8, -8, 5, -5, 0]
-            for offset in offsets {
-                withAnimation(.linear(duration: 0.055)) { shakeOffset = offset }
-                try? await Task.sleep(for: .milliseconds(55))
-            }
-            shakeOffset = 0
-            withAnimation(.easeIn(duration: 0.2)) { lockOpacity = 1 }
-            try? await Task.sleep(for: .seconds(1.5))
-            withAnimation(.easeOut(duration: 0.35)) { lockOpacity = 0 }
-        }
+        withAnimation(.easeIn(duration: 0.15)) { rejectedRingOpacity = 1 }
+        withAnimation(.easeIn(duration: 0.2).delay(0.1)) { lockOpacity = 1 }
+        // Fade-out is handled by onChange(of: state) when state → .idle,
+        // so ring and lock disappear together over rejectedFadeDuration.
     }
 }
 
