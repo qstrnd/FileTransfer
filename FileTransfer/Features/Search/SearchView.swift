@@ -16,7 +16,7 @@ struct SearchView: View {
 
             VStack(spacing: 0) {
                 heroSection
-                    .padding(.top, 100)
+                    .padding(.top, 60)
                     .zIndex(1)
 
                 // Content area always fills remaining space so the VStack height
@@ -44,20 +44,15 @@ struct SearchView: View {
                 .animation(.easeInOut(duration: 0.35), value: viewModel.discoveredPeers.isEmpty)
             }
         }
-        .safeAreaInset(edge: .bottom) {
-            Group {
-                if viewModel.hasConnectedPeers {
-                    sendButton
-                } else if let expired = viewModel.expiredInvitationFrom {
-                    expiredRequestBanner(for: expired)
-                } else if !viewModel.discoveredPeers.isEmpty {
-                    hintText
-                }
-            }
-            .transition(.move(edge: .bottom).combined(with: .opacity))
-            .animation(.spring(duration: 0.35), value: viewModel.hasConnectedPeers)
-            .animation(.easeInOut(duration: 0.35), value: viewModel.discoveredPeers.isEmpty)
-            .animation(.spring(duration: 0.35), value: viewModel.expiredInvitationFrom == nil)
+        .overlay {
+            TransferCurtainView(
+                viewModel: viewModel,
+                onShareText:     { showDataExchange = true },
+                onSharePhoto:    { showDataExchange = true },
+                onShareDocument: { showDataExchange = true },
+                onShareContact:  { showDataExchange = true }
+            )
+            .ignoresSafeArea()
         }
         .overlay {
             // InvitationAlert is always present; it controls its own layer transitions

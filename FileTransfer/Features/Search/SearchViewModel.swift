@@ -103,6 +103,10 @@ final class SearchViewModel {
         }
     }
 
+    func disconnectAll() {
+        connectedPeers.forEach { disconnect(from: $0) }
+    }
+
     func disconnect(from peer: Peer) {
         let current = peerStates[peer] ?? .idle
         log.info("disconnect — peer=\(peer.displayName, privacy: .public) currentState=\(String(describing: current), privacy: .public)")
