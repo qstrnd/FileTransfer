@@ -64,11 +64,14 @@ struct ReceivedTextAlert: View {
 
             Divider()
 
-            // UITextView-backed view: supports simultaneous selection + scroll
-            // without SwiftUI gesture conflicts that block .textSelection(.enabled)
-            SelectableTextView(text: message.text)
-                .frame(maxHeight: 260)
-                .padding(.horizontal, 4)
+            // UITextView-backed view for reliable text selection.
+            // isScrollEnabled=false lets UITextView report true content height so
+            // the card sizes dynamically. SwiftUI ScrollView handles overflow.
+            ScrollView {
+                SelectableTextView(text: message.text)
+                    .padding(.horizontal, 4)
+            }
+            .frame(maxHeight: 320)
 
             Divider()
 
@@ -140,7 +143,9 @@ private struct SelectableTextView: UIViewRepresentable {
         let tv = UITextView()
         tv.isEditable = false
         tv.isSelectable = true
-        tv.isScrollEnabled = true
+        // Non-scrolling so UITextView reports true intrinsic content size,
+        // which lets SwiftUI size the card dynamically to the text height.
+        tv.isScrollEnabled = false
         tv.backgroundColor = .clear
         tv.font = UIFont.preferredFont(forTextStyle: .body)
         tv.adjustsFontForContentSizeCategory = true
@@ -156,7 +161,7 @@ private struct SelectableTextView: UIViewRepresentable {
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
         let width = proposal.width ?? 300
         let height = uiView.sizeThatFits(CGSize(width: width, height: .infinity)).height
-        return CGSize(width: width, height: min(height, 260))
+        return CGSize(width: width, height: height)
     }
 }
 
