@@ -4,10 +4,8 @@ import UIKit
 /// An invisible anchor that manages a sibling UIWindow for toast notifications
 /// that must appear above any modal presentation (sheets, full-screen covers).
 ///
-/// Because sheets are presented inside the main UIWindow's view hierarchy, a
-/// second UIWindow at a higher windowLevel is the only reliable way to render
-/// content above them. This view is embedded in the normal SwiftUI tree solely
-/// to obtain a reference to the active UIWindowScene.
+/// The window's frame is set in UIKit coordinates so the capsule always lands at
+/// exactly the navigation-bar height — no dependence on SwiftUI safe-area layout.
 struct PinnedToast: UIViewRepresentable {
     let peer: Peer?
 
@@ -37,12 +35,24 @@ struct PinnedToast: UIViewRepresentable {
                   let scene = view.window?.windowScene else { return }
             hide()
 
+            // UIKit gives the authoritative safe-area top regardless of whether
+            // the separate UIHostingController inherits insets from the scene.
+            let safeAreaTop = view.window?.safeAreaInsets.top ?? 50
+            let screenWidth  = scene.screen.bounds.width
+            // Tall enough to contain the capsule + room for shadow rendering.
+            let windowHeight: CGFloat = 80
+
             let window = UIWindow(windowScene: scene)
-            window.windowLevel = .alert - 1
+            window.windowLevel   = .alert - 1
             window.backgroundColor = .clear
             window.isUserInteractionEnabled = false
-            // Start above the screen so the capsule slides down into position.
-            window.transform = CGAffineTransform(translationX: 0, y: -120)
+            // Anchor the window frame at the safe-area boundary so the
+            // capsule sits at the same height as a navigation-bar title.
+            window.frame = CGRect(x: 0, y: safeAreaTop,
+                                  width: screenWidth, height: windowHeight)
+            // Begin above the screen (transform relative to the frame above).
+            window.transform = CGAffineTransform(
+                translationX: 0, y: -(safeAreaTop + windowHeight + 20))
             window.alpha = 0
 
             let host = UIHostingController(rootView: ToastCapsule(peer: peer))
@@ -50,7 +60,7 @@ struct PinnedToast: UIViewRepresentable {
             window.rootViewController = host
             window.isHidden = false
 
-            // damping=1 — overdamped spring, no overshoot, clean slide-down.
+            // damping=1 — overdamped, slides in cleanly with no bounce.
             UIView.animate(
                 withDuration: 0.4, delay: 0,
                 usingSpringWithDamping: 1.0, initialSpringVelocity: 0.6
@@ -65,11 +75,14 @@ struct PinnedToast: UIViewRepresentable {
 
         func hide() {
             guard let w = toastWindow else { return }
+            // Slide back above the screen. The window's frame.minY == safeAreaTop,
+            // so translating by -(maxY + 20) puts the bottom edge 20pt above y=0.
+            let slideUp = -(w.frame.maxY + 20)
             UIView.animate(
                 withDuration: 0.3, delay: 0,
                 usingSpringWithDamping: 1, initialSpringVelocity: 0
             ) {
-                w.transform = CGAffineTransform(translationX: 0, y: -120)
+                w.transform = CGAffineTransform(translationX: 0, y: slideUp)
                 w.alpha = 0
             } completion: { _ in
                 w.isHidden = true
@@ -86,20 +99,16 @@ private struct ToastCapsule: View {
     let peer: Peer
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 6) {
-                Text(peer.emojiComponent)
-                Text("\(peer.nameComponent) disconnected")
-                    .font(.subheadline.weight(.semibold))
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 11)
-            .background(.regularMaterial, in: Capsule())
-            .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
-            .padding(.top, 4)
-
-            Spacer()
+        HStack(spacing: 6) {
+            Text(peer.emojiComponent)
+            Text("\(peer.nameComponent) disconnected")
+                .font(.subheadline.weight(.semibold))
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 11)
+        .glassEffect(in: Capsule())
+        .shadow(color: .black.opacity(0.28), radius: 20, y: 5)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(.top, 6)
     }
 }
