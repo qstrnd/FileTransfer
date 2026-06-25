@@ -3,27 +3,38 @@ import SwiftUI
 struct TextShareView: View {
     let onSend: (String) -> Void
     let onCancel: () -> Void
+    let hasConnections: Bool
 
     @AppStorage("textShareDraft") private var text = ""
     @FocusState private var isFocused: Bool
 
     private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var hasContent: Bool { !trimmed.isEmpty }
+    private var canSend: Bool { hasConnections && !trimmed.isEmpty }
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                TextEditor(text: $text)
-                    .font(.body)
-                    .padding(16)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .focused($isFocused)
+                ZStack(alignment: .topLeading) {
+                    TextEditor(text: $text)
+                        .font(.body)
+                        .padding(16)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .focused($isFocused)
+
+                    if text.isEmpty {
+                        Text("Write a message to share…")
+                            .font(.body)
+                            .foregroundStyle(.placeholder)
+                            .padding(EdgeInsets(top: 24, leading: 21, bottom: 0, trailing: 0))
+                            .allowsHitTesting(false)
+                    }
+                }
 
                 Divider()
 
                 Button {
                     let toSend = trimmed
-                    text = ""           // clear persisted draft on send
+                    text = ""
                     onSend(toSend)
                 } label: {
                     Text("Send")
@@ -32,11 +43,11 @@ struct TextShareView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(
-                            hasContent ? Color.accentColor : Color.accentColor.opacity(0.35),
+                            canSend ? Color.accentColor : Color.accentColor.opacity(0.35),
                             in: RoundedRectangle(cornerRadius: 16)
                         )
                 }
-                .disabled(!hasContent)
+                .disabled(!canSend)
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
                 .padding(.bottom, 24)
@@ -47,7 +58,7 @@ struct TextShareView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", action: onCancel)
                 }
-                if hasContent {
+                if !trimmed.isEmpty {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Clear") { text = "" }
                             .foregroundStyle(.secondary)
@@ -59,6 +70,10 @@ struct TextShareView: View {
     }
 }
 
-#Preview {
-    TextShareView(onSend: { _ in }, onCancel: {})
+#Preview("With connections") {
+    TextShareView(onSend: { _ in }, onCancel: {}, hasConnections: true)
+}
+
+#Preview("No connections") {
+    TextShareView(onSend: { _ in }, onCancel: {}, hasConnections: false)
 }

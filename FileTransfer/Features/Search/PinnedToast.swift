@@ -38,10 +38,11 @@ struct PinnedToast: UIViewRepresentable {
             hide()
 
             let window = UIWindow(windowScene: scene)
-            // Above app UI (sheets, covers) but below system alerts.
             window.windowLevel = .alert - 1
             window.backgroundColor = .clear
             window.isUserInteractionEnabled = false
+            // Start above the screen so the capsule slides down into position.
+            window.transform = CGAffineTransform(translationX: 0, y: -120)
             window.alpha = 0
 
             let host = UIHostingController(rootView: ToastCapsule(peer: peer))
@@ -50,9 +51,12 @@ struct PinnedToast: UIViewRepresentable {
             window.isHidden = false
 
             UIView.animate(
-                withDuration: 0.4, delay: 0,
-                usingSpringWithDamping: 0.75, initialSpringVelocity: 0.5
-            ) { window.alpha = 1 }
+                withDuration: 0.45, delay: 0,
+                usingSpringWithDamping: 0.72, initialSpringVelocity: 0.4
+            ) {
+                window.transform = .identity
+                window.alpha = 1
+            }
 
             toastWindow = window
             shownPeerID = peer.id
@@ -60,7 +64,13 @@ struct PinnedToast: UIViewRepresentable {
 
         func hide() {
             guard let w = toastWindow else { return }
-            UIView.animate(withDuration: 0.25) { w.alpha = 0 } completion: { _ in
+            UIView.animate(
+                withDuration: 0.3, delay: 0,
+                usingSpringWithDamping: 1, initialSpringVelocity: 0
+            ) {
+                w.transform = CGAffineTransform(translationX: 0, y: -120)
+                w.alpha = 0
+            } completion: { _ in
                 w.isHidden = true
             }
             toastWindow = nil
@@ -85,7 +95,7 @@ private struct ToastCapsule: View {
             .padding(.vertical, 11)
             .background(.regularMaterial, in: Capsule())
             .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
-            .padding(.top, 12)
+            .padding(.top, 8)
 
             Spacer()
         }

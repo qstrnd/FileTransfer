@@ -64,20 +64,19 @@ struct SearchView: View {
                 onDecline: { viewModel.declineInvitation() }
             )
         }
-        .overlay {
-            ReceivedTextAlert(
-                message: viewModel.receivedMessage,
-                onDismiss: { viewModel.receivedMessage = nil }
-            )
-        }
         .background(PinnedToast(peer: viewModel.disconnectedPeer))
+        .background(PinnedAlert(
+            message: viewModel.receivedMessage,
+            onDismiss: { viewModel.receivedMessage = nil }
+        ))
         .sheet(isPresented: $showTextShare) {
             TextShareView(
                 onSend: { text in
                     viewModel.sendText(text)
                     showTextShare = false
                 },
-                onCancel: { showTextShare = false }
+                onCancel: { showTextShare = false },
+                hasConnections: !viewModel.connectedPeers.isEmpty
             )
         }
         .fullScreenCover(isPresented: $showDataExchange) {
