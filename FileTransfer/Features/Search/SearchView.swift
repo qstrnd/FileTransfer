@@ -7,6 +7,7 @@ struct SearchView: View {
     @State private var showRings = false
     @State private var showText = false
     @State private var showDataExchange = false
+    @State private var showTextShare = false
     @State private var didBackground = false  // tracks that we've been in background
     @Environment(\.scenePhase) private var scenePhase
 
@@ -47,7 +48,7 @@ struct SearchView: View {
         .overlay {
             TransferCurtainView(
                 viewModel: viewModel,
-                onShareText:     { showDataExchange = true },
+                onShareText:     { showTextShare = true },
                 onSharePhoto:    { showDataExchange = true },
                 onShareDocument: { showDataExchange = true },
                 onShareContact:  { showDataExchange = true }
@@ -61,6 +62,21 @@ struct SearchView: View {
                 peer: viewModel.pendingInvitationFrom,
                 onAccept: { viewModel.acceptInvitation() },
                 onDecline: { viewModel.declineInvitation() }
+            )
+        }
+        .overlay {
+            ReceivedTextAlert(
+                message: viewModel.receivedMessage,
+                onDismiss: { viewModel.receivedMessage = nil }
+            )
+        }
+        .sheet(isPresented: $showTextShare) {
+            TextShareView(
+                onSend: { text in
+                    viewModel.sendText(text)
+                    showTextShare = false
+                },
+                onCancel: { showTextShare = false }
             )
         }
         .fullScreenCover(isPresented: $showDataExchange) {
@@ -233,6 +249,7 @@ private func previewVM(peers: [Peer], states: [Peer: PeerConnectionState] = [:])
     let vm = SearchViewModel(emoji: "🐟", name: "Fantastic Fish", deviceID: UUID(),
                              service: PreviewNearbyService(),
                              connectionHistory: InMemoryConnectionHistoryStore(),
+                             historyStore: .preview,
                              onBack: {})
     vm.discoveredPeers = peers
     vm.peerStates = states

@@ -15,6 +15,10 @@ final class SearchViewModel {
     var pendingInvitationFrom: Peer? = nil
     /// Set briefly when an incoming invitation expires before the user responds.
     var expiredInvitationFrom: Peer? = nil
+    /// Set when a text message arrives; cleared when the user dismisses the alert.
+    var receivedMessage: TransferMessage? = nil
+    /// Live transfer history sourced from persistent storage.
+    private(set) var transferHistory: [TransferRecord] = []
 
     var connectedPeers: [Peer] { peerStates.filter { $0.value == .connected }.map(\.key) }
     var hasConnectedPeers: Bool { !connectedPeers.isEmpty }
@@ -22,6 +26,7 @@ final class SearchViewModel {
     private let deviceID: UUID
     private let service: any NearbySessionService
     private let connectionHistory: any ConnectionHistoryStore
+    private let historyStore: TransferHistoryStore
     private let onBack: () -> Void
 
     init(
@@ -30,6 +35,7 @@ final class SearchViewModel {
         deviceID: UUID,
         service: any NearbySessionService,
         connectionHistory: any ConnectionHistoryStore,
+        historyStore: TransferHistoryStore,
         onBack: @escaping () -> Void
     ) {
         self.emoji = emoji
@@ -37,7 +43,9 @@ final class SearchViewModel {
         self.deviceID = deviceID
         self.service = service
         self.connectionHistory = connectionHistory
+        self.historyStore = historyStore
         self.onBack = onBack
+        self.transferHistory = historyStore.records
     }
 
     // MARK: - Lifecycle
@@ -105,6 +113,26 @@ final class SearchViewModel {
 
     func disconnectAll() {
         connectedPeers.forEach { disconnect(from: $0) }
+    }
+
+    func sendText(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        for peer in connectedPeers {
+            service.send(text: trimmed, to: peer)
+            addRecord(TransferRecord(
+                peerEmoji: peer.emojiComponent,
+                peerName: peer.nameComponent,
+                direction: .sent,
+                type: .text,
+                detail: trimmed
+            ))
+        }
+    }
+
+    private func addRecord(_ record: TransferRecord) {
+        historyStore.add(record)
+        transferHistory = historyStore.records
     }
 
     func disconnect(from peer: Peer) {
@@ -221,6 +249,22 @@ extension SearchViewModel: NearbySessionServiceDelegate {
 
     func didReceive(message: TransferMessage) {
         log.debug("didReceive — from \(message.senderName, privacy: .public): \(message.text, privacy: .private)")
+        receivedMessage = message
+        // senderName is the peer's full displayName: "🦒 Cunning Giraffe"
+        let emoji = String(message.senderName.prefix(1))
+        let name: String
+        if let spaceIdx = message.senderName.firstIndex(of: " ") {
+            name = String(message.senderName[message.senderName.index(after: spaceIdx)...])
+        } else {
+            name = message.senderName
+        }
+        addRecord(TransferRecord(
+            peerEmoji: emoji,
+            peerName: name,
+            direction: .received,
+            type: .text,
+            detail: message.text
+        ))
     }
 }
 

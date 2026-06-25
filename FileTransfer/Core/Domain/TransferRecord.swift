@@ -36,6 +36,7 @@ struct TransferRecord: Identifiable, Hashable, Sendable {
     let detail: String?
 
     init(
+        id: UUID = UUID(),
         peerEmoji: String,
         peerName: String,
         date: Date = .now,
@@ -43,7 +44,7 @@ struct TransferRecord: Identifiable, Hashable, Sendable {
         type: TransferType,
         detail: String? = nil
     ) {
-        self.id = UUID()
+        self.id = id
         self.peerEmoji = peerEmoji
         self.peerName = peerName
         self.date = date

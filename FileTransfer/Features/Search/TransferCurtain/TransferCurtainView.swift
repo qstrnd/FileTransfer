@@ -22,15 +22,10 @@ struct TransferCurtainView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: TransferCurtainViewController, context: Context) {
         uiViewController.update(selectedCount: viewModel.connectedPeers.count)
-        // History will be wired to a TransferHistoryStore once that layer is built.
-        #if DEBUG
-        uiViewController.update(history: TransferRecord.previews)
-        #else
-        uiViewController.update(history: [])
-        #endif
+        uiViewController.update(history: viewModel.transferHistory)
 
         // Refresh callbacks on every SwiftUI update so closures that capture
-        // @State variables (like showDataExchange) always stay current.
+        // @State variables (like showTextShare) always stay current.
         uiViewController.onShareText     = onShareText
         uiViewController.onSharePhoto    = onSharePhoto
         uiViewController.onShareDocument = onShareDocument

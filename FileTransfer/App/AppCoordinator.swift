@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftData
 import SwiftUI
 
 @MainActor
@@ -11,6 +12,7 @@ final class AppCoordinator {
     private let identityStore: any DeviceIdentityStore
     private let connectionHistory: any ConnectionHistoryStore
     private let profileStore: any UserProfileStore
+    private let historyStore: TransferHistoryStore
 
     /// The most recently saved profile, used to pre-fill the onboarding screen
     /// when the user navigates back from the search screen.
@@ -26,10 +28,25 @@ final class AppCoordinator {
         self.identityStore = identityStore
         self.connectionHistory = connectionHistory
         self.profileStore = profileStore
+        self.historyStore = Self.makeHistoryStore()
         // All stored properties are initialised — safe to reference self.
         // Skip onboarding if the user has already set up their profile.
         if let profile = profileStore.savedProfile {
             searchViewModel = makeSearchViewModel(emoji: profile.emoji, name: profile.name)
+        }
+    }
+
+    private static func makeHistoryStore() -> TransferHistoryStore {
+        do {
+            let container = try ModelContainer(for: TransferItem.self)
+            return TransferHistoryStore(context: ModelContext(container))
+        } catch {
+            // Fallback to in-memory if the on-disk container fails to open.
+            let container = try! ModelContainer(
+                for: TransferItem.self,
+                configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+            )
+            return TransferHistoryStore(context: ModelContext(container))
         }
     }
 
@@ -57,6 +74,7 @@ final class AppCoordinator {
             deviceID: identityStore.deviceID,
             service: service,
             connectionHistory: connectionHistory,
+            historyStore: historyStore,
             onBack: { [weak self] in self?.backToOnboarding() }
         )
     }
