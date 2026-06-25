@@ -28,7 +28,7 @@ struct ReceivedTextAlert: View {
                 copiedToast
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .padding(.top, 60)
+                    .padding(.top, 12)
                     .allowsHitTesting(false)
             }
         }
@@ -64,22 +64,18 @@ struct ReceivedTextAlert: View {
 
             Divider()
 
-            // Selectable message body
-            ScrollView {
-                Text(message.text)
-                    .textSelection(.enabled)
-                    .font(.body)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(20)
-            }
-            .frame(maxHeight: 260)
+            // UITextView-backed view: supports simultaneous selection + scroll
+            // without SwiftUI gesture conflicts that block .textSelection(.enabled)
+            SelectableTextView(text: message.text)
+                .frame(maxHeight: 260)
+                .padding(.horizontal, 4)
 
             Divider()
 
             // Action row
             HStack(spacing: 0) {
                 Button {
-                    copyToClipboard(message.text)
+                    copyAndDismiss(message.text)
                 } label: {
                     Text("Copy")
                         .font(.body.weight(.semibold))
@@ -122,13 +118,45 @@ struct ReceivedTextAlert: View {
 
     // MARK: - Actions
 
-    private func copyToClipboard(_ text: String) {
+    private func copyAndDismiss(_ text: String) {
         UIPasteboard.general.string = text
         showCopiedToast = true
         Task { @MainActor in
-            try? await Task.sleep(for: .seconds(2))
-            showCopiedToast = false
+            try? await Task.sleep(for: .milliseconds(700))
+            onDismiss()
         }
+    }
+}
+
+// MARK: - Selectable text view
+
+/// UITextView wrapper that gives reliable text selection inside a constrained
+/// height container. SwiftUI's Text + .textSelection(.enabled) conflicts with
+/// ScrollView's pan gesture recognizer, making selection unreliable.
+private struct SelectableTextView: UIViewRepresentable {
+    let text: String
+
+    func makeUIView(context: Context) -> UITextView {
+        let tv = UITextView()
+        tv.isEditable = false
+        tv.isSelectable = true
+        tv.isScrollEnabled = true
+        tv.backgroundColor = .clear
+        tv.font = UIFont.preferredFont(forTextStyle: .body)
+        tv.adjustsFontForContentSizeCategory = true
+        tv.textContainerInset = UIEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
+        tv.textContainer.lineFragmentPadding = 0
+        return tv
+    }
+
+    func updateUIView(_ uiView: UITextView, context: Context) {
+        uiView.text = text
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
+        let width = proposal.width ?? 300
+        let height = uiView.sizeThatFits(CGSize(width: width, height: .infinity)).height
+        return CGSize(width: width, height: min(height, 260))
     }
 }
 
@@ -139,6 +167,16 @@ struct ReceivedTextAlert: View {
         Color(.systemGroupedBackground).ignoresSafeArea()
         ReceivedTextAlert(
             message: TransferMessage(senderName: "🦒 Cunning Giraffe", text: "Hey, on my way! Should be there in about 10 minutes. See you soon 👋"),
+            onDismiss: {}
+        )
+    }
+}
+
+#Preview("Long text") {
+    ZStack {
+        Color(.systemGroupedBackground).ignoresSafeArea()
+        ReceivedTextAlert(
+            message: TransferMessage(senderName: "🐺 Puffy Wolf", text: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur."),
             onDismiss: {}
         )
     }
