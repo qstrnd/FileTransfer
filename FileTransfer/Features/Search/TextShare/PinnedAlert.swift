@@ -46,7 +46,7 @@ struct PinnedAlert: UIViewRepresentable {
             host.view.backgroundColor = .clear
 
             let window = UIWindow(windowScene: scene)
-            window.windowLevel = .alert - 1
+            window.windowLevel = .normal
             window.backgroundColor = .clear
             window.rootViewController = host
             window.isHidden = false
