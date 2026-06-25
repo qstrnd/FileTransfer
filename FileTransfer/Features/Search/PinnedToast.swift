@@ -50,9 +50,10 @@ struct PinnedToast: UIViewRepresentable {
             window.rootViewController = host
             window.isHidden = false
 
+            // damping=1 — overdamped spring, no overshoot, clean slide-down.
             UIView.animate(
-                withDuration: 0.45, delay: 0,
-                usingSpringWithDamping: 0.72, initialSpringVelocity: 0.4
+                withDuration: 0.4, delay: 0,
+                usingSpringWithDamping: 1.0, initialSpringVelocity: 0.6
             ) {
                 window.transform = .identity
                 window.alpha = 1
@@ -95,7 +96,7 @@ private struct ToastCapsule: View {
             .padding(.vertical, 11)
             .background(.regularMaterial, in: Capsule())
             .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
-            .padding(.top, 8)
+            .padding(.top, 4)
 
             Spacer()
         }

@@ -55,16 +55,12 @@ struct SearchView: View {
             )
             .ignoresSafeArea()
         }
-        .overlay {
-            // InvitationAlert is always present; it controls its own layer transitions
-            // internally so the backdrop and card can animate independently.
-            InvitationAlert(
-                peer: viewModel.pendingInvitationFrom,
-                onAccept: { viewModel.acceptInvitation() },
-                onDecline: { viewModel.declineInvitation() }
-            )
-        }
         .background(PinnedToast(peer: viewModel.disconnectedPeer))
+        .background(PinnedInvitationAlert(
+            peer: viewModel.pendingInvitationFrom,
+            onAccept: { viewModel.acceptInvitation() },
+            onDecline: { viewModel.declineInvitation() }
+        ))
         .background(PinnedAlert(
             message: viewModel.receivedMessage,
             onDismiss: { viewModel.receivedMessage = nil }
