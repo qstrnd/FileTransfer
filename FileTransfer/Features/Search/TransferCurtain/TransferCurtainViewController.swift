@@ -45,10 +45,26 @@ final class TransferCurtainViewController: UIViewController {
     private let sheetView = UIView()
     private let countLabel = UILabel()
     private let clearButton = UIButton(type: .system)
-    private let textButton     = TransferActionButton(icon: "bubble.left", title: "Text")
-    private let photoButton    = TransferActionButton(icon: "photo",       title: "Photo")
-    private let documentButton = TransferActionButton(icon: "doc",         title: "Document")
-    private let contactButton  = TransferActionButton(icon: "person",      title: "Contact")
+    private let textButton     = TransferActionButton(
+        icon: "bubble.left", title: "Text",
+        normalBG: TransferType.text.normalBG, pressedBG: TransferType.text.pressedBG,
+        iconTint: TransferType.text.tintColor
+    )
+    private let photoButton    = TransferActionButton(
+        icon: "photo", title: "Photo",
+        normalBG: TransferType.photo.normalBG, pressedBG: TransferType.photo.pressedBG,
+        iconTint: TransferType.photo.tintColor
+    )
+    private let documentButton = TransferActionButton(
+        icon: "doc", title: "Document",
+        normalBG: TransferType.document.normalBG, pressedBG: TransferType.document.pressedBG,
+        iconTint: TransferType.document.tintColor
+    )
+    private let contactButton  = TransferActionButton(
+        icon: "person", title: "Contact",
+        normalBG: TransferType.contact.normalBG, pressedBG: TransferType.contact.pressedBG,
+        iconTint: TransferType.contact.tintColor
+    )
     private let headerView = UIView()
     private let historyHeaderView = UIView()
     private let hintLabel = UILabel()
@@ -94,9 +110,14 @@ final class TransferCurtainViewController: UIViewController {
         }
     }
 
+    override var prefersHomeIndicatorAutoHidden: Bool { false }
+
     override func viewSafeAreaInsetsDidChange() {
         super.viewSafeAreaInsetsDidChange()
-        collectionView.contentInset.bottom = view.safeAreaInsets.bottom + 20
+        let sb = view.safeAreaInsets.bottom
+        collectionView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: sb + 20, right: 0)
+        // Re-run detents: the bottom safe area is now part of the peek calculation.
+        computeDetents()
     }
 
     // MARK: - Public API
@@ -151,7 +172,7 @@ final class TransferCurtainViewController: UIViewController {
             scrimView.alpha = scrimAlpha
         }
 
-        hintLabel.text = progress > 0.5 ? "Drag down to show devices" : "Drag up for full history"
+        hintLabel.isHidden = progress > 0.5
     }
 
     private func snapToDetent(velocity: CGFloat) {
@@ -235,10 +256,11 @@ final class TransferCurtainViewController: UIViewController {
             countLabel.text = "Select a device"
             countLabel.textColor = .secondaryLabel
         } else {
-            countLabel.text = selectedCount == 1 ? "1 selected" : "\(selectedCount) selected"
+            countLabel.text = selectedCount == 1 ? "1 device connected" : "\(selectedCount) devices connected"
             countLabel.textColor = .label
         }
         let enabled = selectedCount > 0
+        clearButton.isHidden = !enabled
         [textButton, photoButton, documentButton, contactButton].forEach { $0.isEnabled = enabled }
     }
 
@@ -286,7 +308,7 @@ final class TransferCurtainViewController: UIViewController {
         countLabel.font = .systemFont(ofSize: 15, weight: .semibold)
         countLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        clearButton.setTitle("Clear", for: .normal)
+        clearButton.setTitle("Disconnect All", for: .normal)
         clearButton.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
         clearButton.translatesAutoresizingMaskIntoConstraints = false
         clearButton.addTarget(self, action: #selector(clearTapped), for: .touchUpInside)
@@ -303,7 +325,7 @@ final class TransferCurtainViewController: UIViewController {
         documentButton.addTarget(self, action: #selector(documentTapped), for: .touchUpInside)
         contactButton.addTarget(self,  action: #selector(contactTapped),  for: .touchUpInside)
 
-        let actionsRow = UIStackView(arrangedSubviews: [textButton, photoButton, documentButton, contactButton])
+        let actionsRow = UIStackView(arrangedSubviews: [contactButton, documentButton, photoButton, textButton])
         actionsRow.axis = .horizontal
         actionsRow.distribution = .fillEqually
         actionsRow.translatesAutoresizingMaskIntoConstraints = false

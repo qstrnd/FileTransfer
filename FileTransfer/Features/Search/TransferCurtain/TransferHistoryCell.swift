@@ -1,11 +1,10 @@
 import UIKit
 
-/// Base history cell. Always shows: emoji avatar with direction badge, peer name,
-/// transfer detail, relative timestamp, and sent/received label.
+/// Base history cell. Always shows: emoji avatar with a type-coloured direction badge,
+/// peer name, transfer detail, and relative timestamp.
 ///
-/// Future subclasses or extended configurations can add preview content
-/// (e.g. image thumbnail, document icon) below the base row by inserting
-/// arranged subviews into `contentStack` before the separator.
+/// Future configurations can add preview content (image thumbnail, document icon)
+/// below the base row by inserting views between detailLabel and the separator.
 final class TransferHistoryCell: UICollectionViewCell {
     static let reuseID = "TransferHistoryCell"
 
@@ -29,7 +28,6 @@ final class TransferHistoryCell: UICollectionViewCell {
 
     private let badgeContainer: UIView = {
         let v = UIView()
-        v.backgroundColor = .systemBackground
         v.layer.cornerRadius = 10
         v.layer.borderWidth = 2
         v.layer.borderColor = UIColor.systemBackground.cgColor
@@ -71,15 +69,6 @@ final class TransferHistoryCell: UICollectionViewCell {
         return l
     }()
 
-    private let directionLabel: UILabel = {
-        let l = UILabel()
-        l.font = .systemFont(ofSize: 11)
-        l.textAlignment = .right
-        l.setContentHuggingPriority(.required, for: .horizontal)
-        l.translatesAutoresizingMaskIntoConstraints = false
-        return l
-    }()
-
     private let separator: UIView = {
         let v = UIView()
         v.backgroundColor = .separator
@@ -105,19 +94,18 @@ final class TransferHistoryCell: UICollectionViewCell {
         avatarLabel.text = record.peerEmoji
         nameLabel.text = record.peerName
         detailLabel.text = record.detail ?? record.type.defaultDetail
+        timeLabel.text = record.date.formatted(.relative(presentation: .named))
 
-        let received = record.direction == .received
-        let tint: UIColor = received ? .systemGreen : .systemBlue
-        let arrow = received ? "arrow.down" : "arrow.up"
-
+        // Badge colour = transfer type; arrow direction = sent vs received.
+        // arrow.down.left = incoming (received from peer)
+        // arrow.up.right  = outgoing (sent to peer)
+        let arrow = record.direction == .received ? "arrow.down.left" : "arrow.up.right"
+        badgeContainer.backgroundColor = record.type.normalBG
         badgeIcon.image = UIImage(
             systemName: arrow,
             withConfiguration: UIImage.SymbolConfiguration(pointSize: 9, weight: .bold)
         )
-        badgeIcon.tintColor = tint
-        directionLabel.text = received ? "Received" : "Sent"
-        directionLabel.textColor = tint
-        timeLabel.text = record.date.formatted(.relative(presentation: .named))
+        badgeIcon.tintColor = record.type.tintColor
     }
 
     // MARK: - Setup
@@ -131,17 +119,15 @@ final class TransferHistoryCell: UICollectionViewCell {
         contentView.addSubview(nameLabel)
         contentView.addSubview(detailLabel)
         contentView.addSubview(timeLabel)
-        contentView.addSubview(directionLabel)
         contentView.addSubview(separator)
 
-        // Minimum height so collapsed peek shows consistent row heights.
         let minHeight = contentView.heightAnchor.constraint(greaterThanOrEqualToConstant: 68)
         minHeight.priority = .required
 
         NSLayoutConstraint.activate([
             minHeight,
 
-            // Avatar: 44×44, 20pt from leading, vertically centered
+            // Avatar: 44×44, 20pt from leading, vertically centred
             avatarContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
             avatarContainer.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
             avatarContainer.widthAnchor.constraint(equalToConstant: 44),
@@ -161,33 +147,27 @@ final class TransferHistoryCell: UICollectionViewCell {
             badgeIcon.widthAnchor.constraint(equalToConstant: 12),
             badgeIcon.heightAnchor.constraint(equalToConstant: 12),
 
-            // Time: trailing 20pt, aligned to name top
+            // Time: trailing 20pt, vertically aligned with name
             timeLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
-            timeLabel.topAnchor.constraint(equalTo: nameLabel.topAnchor),
+            timeLabel.firstBaselineAnchor.constraint(equalTo: nameLabel.firstBaselineAnchor),
 
-            // Direction: below time, same trailing
-            directionLabel.trailingAnchor.constraint(equalTo: timeLabel.trailingAnchor),
-            directionLabel.topAnchor.constraint(equalTo: timeLabel.bottomAnchor, constant: 2),
-
-            // Name: after avatar, bounded by time
+            // Name: after avatar, bounded by time label
             nameLabel.leadingAnchor.constraint(equalTo: avatarContainer.trailingAnchor, constant: 12),
             nameLabel.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 14),
             nameLabel.trailingAnchor.constraint(lessThanOrEqualTo: timeLabel.leadingAnchor, constant: -8),
 
             // Detail: below name
-            // Future preview content can be added after this label by inserting
-            // additional views between detailLabel.bottomAnchor and separator.topAnchor.
+            // Future preview content can be inserted between detailLabel and the separator.
             detailLabel.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
             detailLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 3),
             detailLabel.trailingAnchor.constraint(lessThanOrEqualTo: timeLabel.leadingAnchor, constant: -8),
             detailLabel.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -14),
 
-            // Separator: hairline at bottom, inset from avatar leading
+            // Separator: hairline at bottom, inset to match leading text
             separator.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
             separator.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             separator.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
             separator.heightAnchor.constraint(equalToConstant: 0.5),
         ])
     }
-
 }

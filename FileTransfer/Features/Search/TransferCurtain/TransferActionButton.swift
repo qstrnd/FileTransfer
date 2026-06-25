@@ -8,10 +8,12 @@ final class TransferActionButton: UIControl {
     private let iconView = UIImageView()
     private let titleLabel = UILabel()
 
-    private let normalBG   = UIColor(red: 0.918, green: 0.953, blue: 1.00, alpha: 1) // #EAF3FF
-    private let pressedBG  = UIColor(red: 0.843, green: 0.914, blue: 1.00, alpha: 1) // #D7E9FF
+    private let normalBG:  UIColor
+    private let pressedBG: UIColor
 
-    init(icon: String, title: String) {
+    init(icon: String, title: String, normalBG: UIColor, pressedBG: UIColor, iconTint: UIColor) {
+        self.normalBG  = normalBG
+        self.pressedBG = pressedBG
         super.init(frame: .zero)
 
         iconContainer.backgroundColor = normalBG
@@ -21,7 +23,7 @@ final class TransferActionButton: UIControl {
 
         let symbolConfig = UIImage.SymbolConfiguration(pointSize: 22, weight: .regular)
         iconView.image = UIImage(systemName: icon, withConfiguration: symbolConfig)
-        iconView.tintColor = .systemBlue
+        iconView.tintColor = iconTint
         iconView.contentMode = .scaleAspectFit
         iconView.isUserInteractionEnabled = false
         iconView.translatesAutoresizingMaskIntoConstraints = false
