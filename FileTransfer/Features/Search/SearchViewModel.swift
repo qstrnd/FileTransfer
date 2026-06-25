@@ -17,6 +17,8 @@ final class SearchViewModel {
     var expiredInvitationFrom: Peer? = nil
     /// Set when a text message arrives; cleared when the user dismisses the alert.
     var receivedMessage: TransferMessage? = nil
+    /// Set briefly when a previously-connected peer drops without us initiating.
+    var disconnectedPeer: Peer? = nil
     /// Live transfer history sourced from persistent storage.
     private(set) var transferHistory: [TransferRecord] = []
 
@@ -216,6 +218,18 @@ extension SearchViewModel: NearbySessionServiceDelegate {
         }
         withAnimation { peerStates[peer] = next }
         log.debug("didDisconnect — state → \(String(describing: next), privacy: .public)")
+
+        // Remote-initiated disconnect from an established connection.
+        // When WE initiate, disconnect(from:) updates peerStates[peer] to a
+        // non-.connected state before service.disconnect() is called, so by the
+        // time this delegate fires current is already the post-transition value.
+        if current == .connected {
+            withAnimation { disconnectedPeer = peer }
+            Task {
+                try? await Task.sleep(for: .seconds(3))
+                withAnimation { if disconnectedPeer == peer { disconnectedPeer = nil } }
+            }
+        }
 
         if next == .rejected {
             Task {

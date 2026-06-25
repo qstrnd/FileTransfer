@@ -4,12 +4,11 @@ struct TextShareView: View {
     let onSend: (String) -> Void
     let onCancel: () -> Void
 
-    @State private var text = ""
+    @AppStorage("textShareDraft") private var text = ""
     @FocusState private var isFocused: Bool
 
-    private var canSend: Bool {
-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
+    private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var hasContent: Bool { !trimmed.isEmpty }
 
     var body: some View {
         NavigationStack {
@@ -23,7 +22,9 @@ struct TextShareView: View {
                 Divider()
 
                 Button {
-                    onSend(text.trimmingCharacters(in: .whitespacesAndNewlines))
+                    let toSend = trimmed
+                    text = ""           // clear persisted draft on send
+                    onSend(toSend)
                 } label: {
                     Text("Send")
                         .font(.headline)
@@ -31,11 +32,11 @@ struct TextShareView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(
-                            canSend ? Color.accentColor : Color.accentColor.opacity(0.35),
+                            hasContent ? Color.accentColor : Color.accentColor.opacity(0.35),
                             in: RoundedRectangle(cornerRadius: 16)
                         )
                 }
-                .disabled(!canSend)
+                .disabled(!hasContent)
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
                 .padding(.bottom, 24)
@@ -45,6 +46,12 @@ struct TextShareView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", action: onCancel)
+                }
+                if hasContent {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Clear") { text = "" }
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
         }
