@@ -34,7 +34,9 @@ struct ReceivedTextAlert: View {
         }
         .animation(.spring(duration: 0.3), value: message?.id)
         .animation(.spring(duration: 0.35), value: showCopiedToast)
-        .onChange(of: message?.id) { _, _ in showCopiedToast = false }
+        // Only reset toast when a genuinely new message arrives, not when message → nil
+        // (nil happens on dismiss, and the toast should outlive the card animation).
+        .onChange(of: message?.id) { _, newID in if newID != nil { showCopiedToast = false } }
     }
 
     // MARK: - Card
@@ -123,10 +125,13 @@ struct ReceivedTextAlert: View {
 
     private func copyAndDismiss(_ text: String) {
         UIPasteboard.general.string = text
-        showCopiedToast = true
+        onDismiss()         // dismiss the card immediately
         Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(700))
-            onDismiss()
+            // Brief pause so the card's exit animation leads; then toast slides in.
+            try? await Task.sleep(for: .milliseconds(150))
+            showCopiedToast = true
+            try? await Task.sleep(for: .seconds(2))
+            showCopiedToast = false
         }
     }
 }
