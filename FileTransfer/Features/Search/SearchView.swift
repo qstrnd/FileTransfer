@@ -70,23 +70,7 @@ struct SearchView: View {
                 onDismiss: { viewModel.receivedMessage = nil }
             )
         }
-        .overlay(alignment: .top) {
-            if let peer = viewModel.disconnectedPeer {
-                HStack(spacing: 6) {
-                    Text(peer.emojiComponent)
-                    Text("\(peer.nameComponent) disconnected")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 11)
-                .background(.regularMaterial, in: Capsule())
-                .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
-                .padding(.top, 12)
-                .transition(.move(edge: .top).combined(with: .opacity))
-                .allowsHitTesting(false)
-            }
-        }
-        .animation(.spring(duration: 0.35), value: viewModel.disconnectedPeer?.id)
+        .background(PinnedToast(peer: viewModel.disconnectedPeer))
         .sheet(isPresented: $showTextShare) {
             TextShareView(
                 onSend: { text in
