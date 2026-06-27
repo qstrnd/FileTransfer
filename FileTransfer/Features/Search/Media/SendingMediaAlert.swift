@@ -24,17 +24,8 @@ struct SendingMediaAlert: View {
 
     private func card(for transfer: OutgoingMediaTransfer) -> some View {
         VStack(spacing: 0) {
-            if transfer.isComplete {
-                VStack(spacing: 12) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                        .font(.system(size: 52))
-                    Text("Sent!")
-                        .font(.title2.weight(.semibold))
-                }
-                .padding(.vertical, 40)
-                .padding(.horizontal, 24)
-            } else {
+            // Both states live in a ZStack so the card height never changes on transition.
+            ZStack {
                 VStack(spacing: 12) {
                     ProgressView()
                         .scaleEffect(1.4)
@@ -45,21 +36,38 @@ struct SendingMediaAlert: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
-                .padding(.top, 32)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 20)
+                .frame(maxWidth: .infinity)
+                .opacity(transfer.isComplete ? 0 : 1)
 
-                Divider()
-
-                Button(role: .destructive, action: onAbort) {
-                    Text("Cancel")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
+                VStack(spacing: 12) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.system(size: 52))
+                    Text("Sent!")
+                        .font(.title2.weight(.semibold))
                 }
-                .padding(.horizontal, 4)
-                .padding(.vertical, 2)
+                .frame(maxWidth: .infinity)
+                .opacity(transfer.isComplete ? 1 : 0)
             }
+            .padding(.top, 32)
+            .padding(.horizontal, 24)
+            .padding(.bottom, 20)
+
+            // Divider and Cancel stay in the layout at all times so the card
+            // height is identical in both states; they just fade out on completion.
+            Divider()
+                .opacity(transfer.isComplete ? 0 : 1)
+
+            Button(role: .destructive, action: onAbort) {
+                Text("Cancel")
+                    .font(.body.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+            }
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
+            .opacity(transfer.isComplete ? 0 : 1)
+            .disabled(transfer.isComplete)
         }
         .glassEffect(in: RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
         .animation(.spring(duration: 0.35), value: transfer.isComplete)

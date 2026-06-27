@@ -192,11 +192,14 @@ struct ReceivedMediaAlert: View {
             guard status == .authorized || status == .limited else { return }
             PHPhotoLibrary.shared().performChanges {
                 for item in items {
-                    if item.isVideo {
-                        PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: item.fileURL)
-                    } else {
-                        PHAssetChangeRequest.creationRequestForAssetFromImage(atFileURL: item.fileURL)
-                    }
+                    let request = PHAssetCreationRequest.forAsset()
+                    let options = PHAssetResourceCreationOptions()
+                    options.shouldMoveFile = false
+                    request.addResource(
+                        with: item.isVideo ? .video : .photo,
+                        fileURL: item.fileURL,
+                        options: options
+                    )
                 }
             } completionHandler: { success, _ in
                 guard success else { return }
@@ -219,9 +222,17 @@ struct ReceivedMediaAlert: View {
     }
 
     private func shareItems(_ items: [ReceivedMediaItem]) {
-        let urls = items.map(\.fileURL)
-        guard !urls.isEmpty, let presenter = topViewController() else { return }
-        let activityVC = UIActivityViewController(activityItems: urls, applicationActivities: nil)
+        guard !items.isEmpty, let presenter = topViewController() else { return }
+        // Share images as UIImage (so the sheet offers "Save Image", AirDrop as photo, etc.)
+        // and videos as file URLs.
+        let activityItems: [Any] = items.map { item in
+            if item.isVideo {
+                return item.fileURL as Any
+            } else {
+                return (UIImage(contentsOfFile: item.fileURL.path(percentEncoded: false)) ?? UIImage()) as Any
+            }
+        }
+        let activityVC = UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
         if let popover = activityVC.popoverPresentationController {
             popover.sourceView = presenter.view
             popover.sourceRect = CGRect(x: presenter.view.bounds.midX, y: presenter.view.bounds.midY, width: 0, height: 0)
