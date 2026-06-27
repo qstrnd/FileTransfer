@@ -9,9 +9,6 @@ struct SearchView: View {
     @State private var showDataExchange = false
     @State private var showTextShare = false
     @State private var showMediaPicker = false
-    @State private var pendingMediaItems: [MediaItem] = []
-    @State private var showMediaPreview = false
-    @State private var isAddingMoreMedia = false
     @State private var didBackground = false  // tracks that we've been in background
     @Environment(\.scenePhase) private var scenePhase
 
@@ -53,10 +50,7 @@ struct SearchView: View {
             TransferCurtainView(
                 viewModel: viewModel,
                 onShareText:     { showTextShare = true },
-                onSharePhoto:    {
-                    isAddingMoreMedia = false
-                    showMediaPicker = true
-                },
+                onSharePhoto:    { showMediaPicker = true },
                 onShareDocument: { showDataExchange = true },
                 onShareContact:  { showDataExchange = true }
             )
@@ -77,6 +71,10 @@ struct SearchView: View {
             transfer: viewModel.receivedMedia,
             onDismiss: { viewModel.receivedMedia = nil }
         ))
+        .background(PinnedSendingAlert(
+            transfer: viewModel.outgoingMediaTransfer,
+            onAbort: { viewModel.abortMediaTransfer() }
+        ))
         .sheet(isPresented: $showTextShare) {
             TextShareView(
                 onSend: { text in
@@ -91,36 +89,9 @@ struct SearchView: View {
             MediaPickerView(
                 onComplete: { items in
                     showMediaPicker = false
-                    if isAddingMoreMedia {
-                        pendingMediaItems.append(contentsOf: items)
-                    } else {
-                        pendingMediaItems = items
-                    }
-                    if !pendingMediaItems.isEmpty { showMediaPreview = true }
+                    viewModel.sendMedia(items)
                 },
                 onCancel: { showMediaPicker = false }
-            )
-        }
-        .sheet(isPresented: $showMediaPreview) {
-            MediaPreviewView(
-                items: $pendingMediaItems,
-                hasConnections: !viewModel.connectedPeers.isEmpty,
-                onSend: { items in
-                    viewModel.sendMedia(items)
-                    showMediaPreview = false
-                    pendingMediaItems = []
-                },
-                onCancel: {
-                    showMediaPreview = false
-                    pendingMediaItems = []
-                },
-                onAddMore: {
-                    isAddingMoreMedia = true
-                    showMediaPreview = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        showMediaPicker = true
-                    }
-                }
             )
         }
         .fullScreenCover(isPresented: $showDataExchange) {

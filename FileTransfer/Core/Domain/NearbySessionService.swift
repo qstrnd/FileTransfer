@@ -27,7 +27,7 @@ protocol NearbySessionService: AnyObject {
     /// session so the remote side also receives a disconnect callback.
     func disconnect(from peer: Peer)
     func send(text: String, to peer: Peer)
-    func sendMedia(fileURLs: [URL], to peer: Peer)
+    func sendMedia(fileURLs: [URL], to peer: Peer, onItemSent: @escaping @MainActor () -> Void)
     func acceptInvitation()
     func declineInvitation()
 }
@@ -35,5 +35,5 @@ protocol NearbySessionService: AnyObject {
 // Default no-ops so legacy/preview conformers don't need to change.
 extension NearbySessionService {
     func disconnect(from peer: Peer) {}
-    func sendMedia(fileURLs: [URL], to peer: Peer) {}
+    func sendMedia(fileURLs: [URL], to peer: Peer, onItemSent: @escaping @MainActor () -> Void) {}
 }

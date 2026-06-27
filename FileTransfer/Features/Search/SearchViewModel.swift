@@ -23,6 +23,8 @@ final class SearchViewModel {
     var receivingMediaTransfer: IncomingMediaTransfer? = nil
     /// Set when all items of a media transfer arrive; cleared when user dismisses.
     var receivedMedia: ReceivedMediaTransfer? = nil
+    /// Set while media is being sent; cleared on completion or abort.
+    var outgoingMediaTransfer: OutgoingMediaTransfer? = nil
     /// Live transfer history sourced from persistent storage.
     private(set) var transferHistory: [TransferRecord] = []
 
@@ -138,9 +140,20 @@ final class SearchViewModel {
 
     func sendMedia(_ items: [MediaItem]) {
         guard !items.isEmpty else { return }
+        let peers = connectedPeers
+        guard !peers.isEmpty else { return }
         let fileURLs = items.map(\.fileURL)
-        for peer in connectedPeers {
-            service.sendMedia(fileURLs: fileURLs, to: peer)
+        outgoingMediaTransfer = OutgoingMediaTransfer(totalItems: fileURLs.count, peerCount: peers.count)
+        for peer in peers {
+            service.sendMedia(fileURLs: fileURLs, to: peer) { [weak self] in
+                self?.outgoingMediaTransfer?.recordCompletion()
+                if self?.outgoingMediaTransfer?.isComplete == true {
+                    Task { @MainActor [weak self] in
+                        try? await Task.sleep(for: .seconds(1.5))
+                        self?.outgoingMediaTransfer = nil
+                    }
+                }
+            }
             addRecord(TransferRecord(
                 peerEmoji: peer.emojiComponent,
                 peerName: peer.nameComponent,
@@ -149,6 +162,11 @@ final class SearchViewModel {
                 detail: "\(items.count) item\(items.count == 1 ? "" : "s")"
             ))
         }
+    }
+
+    func abortMediaTransfer() {
+        outgoingMediaTransfer = nil
+        disconnectAll()
     }
 
     private func addRecord(_ record: TransferRecord) {

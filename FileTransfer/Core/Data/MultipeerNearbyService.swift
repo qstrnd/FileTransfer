@@ -85,7 +85,7 @@ final class MultipeerNearbyService: NSObject, NearbySessionService {
         try? session.send(data, toPeers: [peerID], with: .reliable)
     }
 
-    func sendMedia(fileURLs: [URL], to peer: Peer) {
+    func sendMedia(fileURLs: [URL], to peer: Peer, onItemSent: @escaping @MainActor () -> Void) {
         guard let session, let peerID = registry.mcPeerID(for: peer.id) else { return }
         // Remove hyphens from UUID so splitting resource names by "_" is unambiguous:
         // "media_{id}_{index}_{total}" always yields exactly 4 components.
@@ -96,6 +96,7 @@ final class MultipeerNearbyService: NSObject, NearbySessionService {
                 if let error {
                     MultipeerNearbyService.log.error("sendMedia error item \(index): \(error.localizedDescription, privacy: .public)")
                 }
+                Task { @MainActor in onItemSent() }
             }
         }
     }
