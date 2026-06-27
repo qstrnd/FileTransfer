@@ -188,28 +188,35 @@ struct ReceivedMediaAlert: View {
     // MARK: - Actions
 
     private func saveToGallery(_ items: [ReceivedMediaItem]) {
-        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
-            guard status == .authorized || status == .limited else { return }
-            PHPhotoLibrary.shared().performChanges {
-                for item in items {
-                    let request = PHAssetCreationRequest.forAsset()
-                    let options = PHAssetResourceCreationOptions()
-                    options.shouldMoveFile = false
-                    request.addResource(
-                        with: item.isVideo ? .video : .photo,
-                        fileURL: item.fileURL,
-                        options: options
-                    )
-                }
-            } completionHandler: { success, _ in
-                guard success else { return }
-                Task { @MainActor in
-                    showSavedToast = true
-                    try? await Task.sleep(for: .seconds(1.5))
-                    showSavedToast = false
-                    onDismiss()
-                }
+        // Extract only Sendable values before crossing concurrency boundaries.
+        let fileInfos: [(url: URL, isVideo: Bool)] = items.map { ($0.fileURL, $0.isVideo) }
+        Task {
+            // Async API — no callback closure that could inherit @MainActor isolation.
+            let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+            guard status == .authorized || status == .limited else {
+                onDismiss()
+                return
             }
+            let saved: Bool
+            do {
+                // performChanges async/throws (iOS 15+): change block is @Sendable,
+                // so it cannot inherit @MainActor and is safe to call from any thread.
+                try await PHPhotoLibrary.shared().performChanges {
+                    for (url, isVideo) in fileInfos {
+                        let req = PHAssetCreationRequest.forAsset()
+                        let opts = PHAssetResourceCreationOptions()
+                        opts.shouldMoveFile = false
+                        req.addResource(with: isVideo ? .video : .photo, fileURL: url, options: opts)
+                    }
+                }
+                saved = true
+            } catch {
+                saved = false
+            }
+            if saved { showSavedToast = true }
+            try? await Task.sleep(for: .seconds(saved ? 1.5 : 0))
+            showSavedToast = false
+            onDismiss()
         }
     }
 
