@@ -16,9 +16,9 @@ struct SearchingText: View {
                 .foregroundStyle(
                     LinearGradient(
                         stops: [
-                            .init(color: Color.secondary,            location: max(0, phase - 0.25)),
+                            .init(color: Color.secondary,            location: phase - 0.25),
                             .init(color: Color(UIColor.systemGray5), location: phase),
-                            .init(color: Color.secondary,            location: min(1, phase + 0.25)),
+                            .init(color: Color.secondary,            location: phase + 0.25),
                         ],
                         startPoint: UnitPoint(x: 0, y: 0.3),
                         endPoint:   UnitPoint(x: 1, y: 0.7)
