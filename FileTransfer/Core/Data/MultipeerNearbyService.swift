@@ -87,12 +87,14 @@ final class MultipeerNearbyService: NSObject, NearbySessionService {
 
     func sendMedia(fileURLs: [URL], to peer: Peer, onItemSent: @escaping @MainActor () -> Void) {
         guard let session, let peerID = registry.mcPeerID(for: peer.id) else { return }
-        // Remove hyphens from UUID so splitting resource names by "_" is unambiguous:
-        // "media_{id}_{index}_{total}" always yields exactly 4 components.
+        // Hyphens removed from UUID so "_" splitting in MediaTransferResource is unambiguous.
         let transferID = UUID().uuidString.replacingOccurrences(of: "-", with: "")
         for (index, url) in fileURLs.enumerated() {
-            let name = "media_\(transferID)_\(index)_\(fileURLs.count)"
-            session.sendResource(at: url, withName: name, toPeer: peerID) { @Sendable error in
+            let resource = MediaTransferResource(
+                transferID: transferID, index: index,
+                total: fileURLs.count, fileExtension: url.pathExtension
+            )
+            session.sendResource(at: url, withName: resource.name, toPeer: peerID) { @Sendable error in
                 if let error {
                     MultipeerNearbyService.log.error("sendMedia error item \(index): \(error.localizedDescription, privacy: .public)")
                 }
@@ -146,32 +148,27 @@ extension MultipeerNearbyService: MCSessionDelegate {
     nonisolated func session(_ session: MCSession, didReceive stream: InputStream, withName streamName: String, fromPeer peerID: MCPeerID) {}
 
     nonisolated func session(_ session: MCSession, didStartReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, with progress: Progress) {
-        let parts = resourceName.components(separatedBy: "_")
-        guard parts.count == 4, parts[0] == "media",
-              let index = Int(parts[2]), let total = Int(parts[3]) else { return }
-        guard index == 0 else { return }
-        let transferID = parts[1]
+        guard let resource = MediaTransferResource(parsing: resourceName), resource.index == 0 else { return }
         let peer = registry.peer(for: peerID)
         Task { @MainActor [weak self] in
-            self?.delegate?.didStartReceivingMedia(transferID: transferID, totalCount: total, from: peer)
+            self?.delegate?.didStartReceivingMedia(
+                transferID: resource.transferID, totalCount: resource.total, from: peer
+            )
         }
     }
 
     nonisolated func session(_ session: MCSession, didFinishReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, at localURL: URL?, withError error: Error?) {
-        let parts = resourceName.components(separatedBy: "_")
-        guard parts.count == 4, parts[0] == "media",
-              let index = Int(parts[2]), let total = Int(parts[3]),
+        guard let resource = MediaTransferResource(parsing: resourceName),
               let localURL, error == nil else { return }
-        let transferID = parts[1]
-        // Copy to a stable temp path — MPC's localURL is only valid during this callback.
-        let ext = localURL.pathExtension.isEmpty ? "jpg" : localURL.pathExtension
+        // Copy to a stable temp path with the original extension — MPC's localURL
+        // has no extension and is only valid during this callback.
         let destURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("mpc_recv_\(transferID)_\(index).\(ext)")
+            .appendingPathComponent("mpc_recv_\(resource.transferID)_\(resource.index).\(resource.fileExtension)")
         try? FileManager.default.copyItem(at: localURL, to: destURL)
         let peer = registry.peer(for: peerID)
         Task { @MainActor [weak self] in
             self?.delegate?.didReceiveMediaItem(
-                transferID: transferID, index: index, totalCount: total,
+                transferID: resource.transferID, index: resource.index, totalCount: resource.total,
                 at: destURL, from: peer
             )
         }
