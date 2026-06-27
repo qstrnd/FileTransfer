@@ -67,34 +67,7 @@ struct ReceivedMediaAlert: View {
 
             Divider()
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(transfer.items) { item in
-                        ZStack {
-                            Image(uiImage: item.thumbnail)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 160, height: 160)
-                                .clipped()
-                                .cornerRadius(12)
-
-                            if item.isVideo {
-                                ZStack {
-                                    Color.black.opacity(0.3)
-                                    Image(systemName: "play.fill")
-                                        .foregroundStyle(.white)
-                                        .font(.system(size: 28))
-                                }
-                                .frame(width: 160, height: 160)
-                                .cornerRadius(12)
-                                .allowsHitTesting(false)
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-            }
+            mediaSection(for: transfer.items)
 
             Divider()
 
@@ -121,6 +94,17 @@ struct ReceivedMediaAlert: View {
 
                 Divider()
 
+                Button {
+                    shareItems(transfer.items)
+                } label: {
+                    Text("Share…")
+                        .font(.body.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                }
+
+                Divider()
+
                 Button(action: onDismiss) {
                     Text("Dismiss")
                         .font(.body.weight(.semibold))
@@ -133,6 +117,56 @@ struct ReceivedMediaAlert: View {
         }
         .glassEffect(in: RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
         .padding(.horizontal, 24)
+    }
+
+    // MARK: - Media section
+
+    @ViewBuilder
+    private func mediaSection(for items: [ReceivedMediaItem]) -> some View {
+        if items.count == 1, let item = items.first {
+            Image(uiImage: item.thumbnail)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: 300)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay {
+                    if item.isVideo { videoOverlay.clipShape(RoundedRectangle(cornerRadius: 12)) }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(items) { item in
+                        ZStack {
+                            Image(uiImage: item.thumbnail)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 160, height: 160)
+                                .clipped()
+                                .cornerRadius(12)
+                            if item.isVideo {
+                                videoOverlay
+                                    .frame(width: 160, height: 160)
+                                    .cornerRadius(12)
+                                    .allowsHitTesting(false)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+            }
+        }
+    }
+
+    private var videoOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.3)
+            Image(systemName: "play.fill")
+                .foregroundStyle(.white)
+                .font(.system(size: 28))
+        }
     }
 
     // MARK: - Toast
@@ -168,8 +202,9 @@ struct ReceivedMediaAlert: View {
                 guard success else { return }
                 Task { @MainActor in
                     showSavedToast = true
-                    try? await Task.sleep(for: .seconds(2))
+                    try? await Task.sleep(for: .seconds(1.5))
                     showSavedToast = false
+                    onDismiss()
                 }
             }
         }
@@ -177,14 +212,30 @@ struct ReceivedMediaAlert: View {
 
     private func saveToFiles(_ items: [ReceivedMediaItem]) {
         let urls = items.map(\.fileURL)
-        guard !urls.isEmpty else { return }
+        guard !urls.isEmpty, let presenter = topViewController() else { return }
         let docPicker = UIDocumentPickerViewController(forExporting: urls, asCopy: true)
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let rootVC = windowScene.windows.first?.rootViewController else { return }
-        var presenter = rootVC
-        while let presented = presenter.presentedViewController {
-            presenter = presented
-        }
         presenter.present(docPicker, animated: true)
+        onDismiss()
+    }
+
+    private func shareItems(_ items: [ReceivedMediaItem]) {
+        let urls = items.map(\.fileURL)
+        guard !urls.isEmpty, let presenter = topViewController() else { return }
+        let activityVC = UIActivityViewController(activityItems: urls, applicationActivities: nil)
+        if let popover = activityVC.popoverPresentationController {
+            popover.sourceView = presenter.view
+            popover.sourceRect = CGRect(x: presenter.view.bounds.midX, y: presenter.view.bounds.midY, width: 0, height: 0)
+            popover.permittedArrowDirections = []
+        }
+        presenter.present(activityVC, animated: true)
+        onDismiss()
+    }
+
+    private func topViewController() -> UIViewController? {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootVC = windowScene.windows.first?.rootViewController else { return nil }
+        var presenter = rootVC
+        while let presented = presenter.presentedViewController { presenter = presented }
+        return presenter
     }
 }

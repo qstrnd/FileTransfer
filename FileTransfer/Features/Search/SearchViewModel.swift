@@ -335,7 +335,6 @@ extension SearchViewModel: NearbySessionServiceDelegate {
 
         guard receivingMediaTransfer?.isComplete == true,
               let transfer = receivingMediaTransfer else { return }
-        receivingMediaTransfer = nil
 
         let senderName = transfer.senderName
         let orderedURLs = transfer.orderedURLs
@@ -358,6 +357,10 @@ extension SearchViewModel: NearbySessionServiceDelegate {
             for url in orderedURLs {
                 mediaItems.append(await ReceivedMediaItem.load(from: url))
             }
+            // Keep the receiving toast visible for a moment so the user sees
+            // the transfer complete before the received-media alert appears.
+            try? await Task.sleep(for: .seconds(1.2))
+            receivingMediaTransfer = nil
             receivedMedia = ReceivedMediaTransfer(senderName: senderName, items: mediaItems)
         }
     }
