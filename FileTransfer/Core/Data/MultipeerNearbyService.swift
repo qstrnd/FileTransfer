@@ -85,6 +85,21 @@ final class MultipeerNearbyService: NSObject, NearbySessionService {
         try? session.send(data, toPeers: [peerID], with: .reliable)
     }
 
+    func sendMedia(fileURLs: [URL], to peer: Peer) {
+        guard let session, let peerID = registry.mcPeerID(for: peer.id) else { return }
+        // Remove hyphens from UUID so splitting resource names by "_" is unambiguous:
+        // "media_{id}_{index}_{total}" always yields exactly 4 components.
+        let transferID = UUID().uuidString.replacingOccurrences(of: "-", with: "")
+        for (index, url) in fileURLs.enumerated() {
+            let name = "media_\(transferID)_\(index)_\(fileURLs.count)"
+            session.sendResource(at: url, withName: name, toPeer: peerID) { error in
+                if let error {
+                    MultipeerNearbyService.log.error("sendMedia error item \(index): \(error.localizedDescription, privacy: .public)")
+                }
+            }
+        }
+    }
+
     func acceptInvitation() {
         MultipeerNearbyService.log.info("acceptInvitation")
         invitationHandler?(true, session)
@@ -128,8 +143,38 @@ extension MultipeerNearbyService: MCSessionDelegate {
     }
 
     nonisolated func session(_ session: MCSession, didReceive stream: InputStream, withName streamName: String, fromPeer peerID: MCPeerID) {}
-    nonisolated func session(_ session: MCSession, didStartReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, with progress: Progress) {}
-    nonisolated func session(_ session: MCSession, didFinishReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, at localURL: URL?, withError error: Error?) {}
+
+    nonisolated func session(_ session: MCSession, didStartReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, with progress: Progress) {
+        let parts = resourceName.components(separatedBy: "_")
+        guard parts.count == 4, parts[0] == "media",
+              let index = Int(parts[2]), let total = Int(parts[3]) else { return }
+        guard index == 0 else { return }
+        let transferID = parts[1]
+        let peer = registry.peer(for: peerID)
+        Task { @MainActor [weak self] in
+            self?.delegate?.didStartReceivingMedia(transferID: transferID, totalCount: total, from: peer)
+        }
+    }
+
+    nonisolated func session(_ session: MCSession, didFinishReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, at localURL: URL?, withError error: Error?) {
+        let parts = resourceName.components(separatedBy: "_")
+        guard parts.count == 4, parts[0] == "media",
+              let index = Int(parts[2]), let total = Int(parts[3]),
+              let localURL, error == nil else { return }
+        let transferID = parts[1]
+        // Copy to a stable temp path — MPC's localURL is only valid during this callback.
+        let ext = localURL.pathExtension.isEmpty ? "jpg" : localURL.pathExtension
+        let destURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mpc_recv_\(transferID)_\(index).\(ext)")
+        try? FileManager.default.copyItem(at: localURL, to: destURL)
+        let peer = registry.peer(for: peerID)
+        Task { @MainActor [weak self] in
+            self?.delegate?.didReceiveMediaItem(
+                transferID: transferID, index: index, totalCount: total,
+                at: destURL, from: peer
+            )
+        }
+    }
 }
 
 // MARK: - MCNearbyServiceAdvertiserDelegate

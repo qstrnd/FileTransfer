@@ -19,6 +19,10 @@ final class SearchViewModel {
     var receivedMessage: TransferMessage? = nil
     /// Set briefly when a previously-connected peer drops without us initiating.
     var disconnectedPeer: Peer? = nil
+    /// Tracks an in-progress incoming media transfer; updated as items arrive.
+    var receivingMediaTransfer: IncomingMediaTransfer? = nil
+    /// Set when all items of a media transfer arrive; cleared when user dismisses.
+    var receivedMedia: ReceivedMediaTransfer? = nil
     /// Live transfer history sourced from persistent storage.
     private(set) var transferHistory: [TransferRecord] = []
 
@@ -128,6 +132,21 @@ final class SearchViewModel {
                 direction: .sent,
                 type: .text,
                 detail: trimmed
+            ))
+        }
+    }
+
+    func sendMedia(_ items: [MediaItem]) {
+        guard !items.isEmpty else { return }
+        let fileURLs = items.map(\.fileURL)
+        for peer in connectedPeers {
+            service.sendMedia(fileURLs: fileURLs, to: peer)
+            addRecord(TransferRecord(
+                peerEmoji: peer.emojiComponent,
+                peerName: peer.nameComponent,
+                direction: .sent,
+                type: .photo,
+                detail: "\(items.count) item\(items.count == 1 ? "" : "s")"
             ))
         }
     }
@@ -279,6 +298,50 @@ extension SearchViewModel: NearbySessionServiceDelegate {
             type: .text,
             detail: message.text
         ))
+    }
+
+    func didStartReceivingMedia(transferID: String, totalCount: Int, from peer: Peer) {
+        guard receivingMediaTransfer?.id != transferID else { return }
+        receivingMediaTransfer = IncomingMediaTransfer(
+            id: transferID, senderName: peer.displayName, totalCount: totalCount
+        )
+    }
+
+    func didReceiveMediaItem(transferID: String, index: Int, totalCount: Int, at url: URL, from peer: Peer) {
+        if receivingMediaTransfer == nil || receivingMediaTransfer?.id != transferID {
+            receivingMediaTransfer = IncomingMediaTransfer(
+                id: transferID, senderName: peer.displayName, totalCount: totalCount
+            )
+        }
+        receivingMediaTransfer?.add(url: url, at: index)
+
+        guard receivingMediaTransfer?.isComplete == true,
+              let transfer = receivingMediaTransfer else { return }
+        receivingMediaTransfer = nil
+
+        let senderName = transfer.senderName
+        let orderedURLs = transfer.orderedURLs
+        let emoji = String(peer.displayName.prefix(1))
+        let name: String
+        if let spaceIdx = peer.displayName.firstIndex(of: " ") {
+            name = String(peer.displayName[peer.displayName.index(after: spaceIdx)...])
+        } else {
+            name = peer.displayName
+        }
+        addRecord(TransferRecord(
+            peerEmoji: emoji,
+            peerName: name,
+            direction: .received,
+            type: .photo,
+            detail: "\(transfer.totalCount) item\(transfer.totalCount == 1 ? "" : "s")"
+        ))
+        Task {
+            var mediaItems: [ReceivedMediaItem] = []
+            for url in orderedURLs {
+                mediaItems.append(await ReceivedMediaItem.load(from: url))
+            }
+            receivedMedia = ReceivedMediaTransfer(senderName: senderName, items: mediaItems)
+        }
     }
 }
 

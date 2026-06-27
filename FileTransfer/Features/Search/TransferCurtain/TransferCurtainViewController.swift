@@ -51,7 +51,7 @@ final class TransferCurtainViewController: UIViewController {
         iconTint: TransferType.text.tintColor
     )
     private let photoButton    = TransferActionButton(
-        icon: "photo", title: "Photo",
+        icon: "photo.stack", title: "Gallery",
         normalBG: TransferType.photo.normalBG, pressedBG: TransferType.photo.pressedBG,
         iconTint: TransferType.photo.tintColor
     )
