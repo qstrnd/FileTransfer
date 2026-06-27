@@ -92,7 +92,7 @@ final class MultipeerNearbyService: NSObject, NearbySessionService {
         let transferID = UUID().uuidString.replacingOccurrences(of: "-", with: "")
         for (index, url) in fileURLs.enumerated() {
             let name = "media_\(transferID)_\(index)_\(fileURLs.count)"
-            session.sendResource(at: url, withName: name, toPeer: peerID) { error in
+            session.sendResource(at: url, withName: name, toPeer: peerID) { @Sendable error in
                 if let error {
                     MultipeerNearbyService.log.error("sendMedia error item \(index): \(error.localizedDescription, privacy: .public)")
                 }
