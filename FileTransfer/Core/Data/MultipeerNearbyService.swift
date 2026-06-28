@@ -59,13 +59,14 @@ final class MultipeerNearbyService: NSObject, NearbySessionService {
         registry.reset()
     }
 
-    func connect(to peer: Peer) {
+    func connect(to peer: Peer, isReconnect: Bool) {
         guard let browser, let session, let peerID = registry.mcPeerID(for: peer.id) else {
             MultipeerNearbyService.log.warning("connect — peerID not found for \(peer.displayName, privacy: .public)")
             return
         }
-        MultipeerNearbyService.log.info("connect — inviting \(peer.displayName, privacy: .public) timeout=\(mcInvitationTimeout)s")
-        browser.invitePeer(peerID, to: session, withContext: nil, timeout: mcInvitationTimeout)
+        let context = isReconnect ? Self.reconnectContext : nil
+        MultipeerNearbyService.log.info("connect — inviting \(peer.displayName, privacy: .public) isReconnect=\(isReconnect) timeout=\(mcInvitationTimeout)s")
+        browser.invitePeer(peerID, to: session, withContext: context, timeout: mcInvitationTimeout)
     }
 
     func disconnect(from peer: Peer) {
@@ -96,8 +97,10 @@ final class MultipeerNearbyService: NSObject, NearbySessionService {
         try? session.send(payload, toPeers: [peerID], with: .reliable)
     }
 
-    // 0xFF cannot be the first byte of a valid UTF-8 string, making contact payloads unambiguous.
-    nonisolated private static let contactMagic: [UInt8] = [0xFF, 0x63, 0x74]
+    // 0xFF cannot be the first byte of a valid UTF-8 string, making all control payloads unambiguous.
+    nonisolated private static let contactMagic: [UInt8] = [0xFF, 0x63, 0x74]  // 'c','t'
+    // Context byte sent with reconnect invitations so the receiver can auto-accept.
+    nonisolated private static let reconnectContext = Data([0xFE, 0x52])        // 0xFE + 'R'
 
     func sendMedia(_ files: [MediaFileToSend], to peer: Peer, onItemSent: @escaping @MainActor () -> Void) {
         guard let session, let peerID = registry.mcPeerID(for: peer.id) else { return }
@@ -153,13 +156,11 @@ extension MultipeerNearbyService: MCSessionDelegate {
 
     nonisolated func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
         MultipeerNearbyService.log.debug("didReceive \(data.count)B from \(peerID.displayName, privacy: .public)")
-        let magic = Self.contactMagic
-        if data.count > magic.count && data.prefix(magic.count).elementsEqual(magic) {
-            let vCardData = data.dropFirst(magic.count)
-            let peer = registry.peer(for: peerID)
+        let peer = registry.peer(for: peerID)
+        if data.count > Self.contactMagic.count && data.prefix(Self.contactMagic.count).elementsEqual(Self.contactMagic) {
+            let vCardData = data.dropFirst(Self.contactMagic.count)
             Task { @MainActor [weak self] in self?.delegate?.didReceiveContact(data: Data(vCardData), from: peer) }
-        } else {
-            guard let text = String(data: data, encoding: .utf8) else { return }
+        } else if let text = String(data: data, encoding: .utf8) {
             let message = TransferMessage(senderName: peerID.displayName, text: text)
             Task { @MainActor [weak self] in self?.delegate?.didReceive(message: message) }
         }
@@ -210,9 +211,16 @@ extension MultipeerNearbyService: MCSessionDelegate {
 extension MultipeerNearbyService: MCNearbyServiceAdvertiserDelegate {
     nonisolated func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didReceiveInvitationFromPeer peerID: MCPeerID, withContext context: Data?, invitationHandler: @escaping (Bool, MCSession?) -> Void) {
         let peer = registry.peer(for: peerID)
-        MultipeerNearbyService.log.info("didReceiveInvitation from \(peerID.displayName, privacy: .public)")
+        let isReconnect = context == Self.reconnectContext
+        MultipeerNearbyService.log.info("didReceiveInvitation from \(peerID.displayName, privacy: .public) isReconnect=\(isReconnect)")
         self.invitationHandler = invitationHandler
-        Task { @MainActor [weak self] in self?.delegate?.didReceiveInvitation(from: peer) }
+        Task { @MainActor [weak self] in
+            if isReconnect {
+                self?.delegate?.didReceiveReconnectInvitation(from: peer)
+            } else {
+                self?.delegate?.didReceiveInvitation(from: peer)
+            }
+        }
     }
 
     nonisolated func advertiser(_ advertiser: MCNearbyServiceAdvertiser, didNotStartAdvertisingPeer error: Error) {

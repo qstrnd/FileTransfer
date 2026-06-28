@@ -58,6 +58,8 @@ struct SearchView: View {
             .ignoresSafeArea()
         }
         .background(PinnedToast(peer: viewModel.disconnectedPeer))
+        .background(PinnedToast(peer: viewModel.reconnectedPeer, message: "is connected"))
+        .background(PinnedToast(peer: nil, staticMessage: viewModel.connectionsRestored ? "Connections are restored" : nil))
         .background(PinnedWindow(
             content: InvitationAlert(
                 peer: viewModel.pendingInvitationFrom,
@@ -192,7 +194,7 @@ private final class PreviewNearbyService: NearbySessionService {
     var delegate: (any NearbySessionServiceDelegate)?
     func start(displayName: String, deviceID: UUID) {}
     func stop() {}
-    func connect(to peer: Peer) {}
+    func connect(to peer: Peer, isReconnect: Bool) {}
     func send(text: String, to peer: Peer) {}
     func acceptInvitation() {}
     func declineInvitation() {}

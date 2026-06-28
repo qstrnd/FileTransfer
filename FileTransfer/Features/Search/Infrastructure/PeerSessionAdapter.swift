@@ -11,6 +11,8 @@ protocol PeerSessionEvents: AnyObject {
     func peerConnected(_ peer: Peer)
     func peerDisconnected(_ peer: Peer)
     func invitationReceived(from peer: Peer)
+    /// Called when a reconnect-flagged invitation arrives; should auto-accept if peer is in history.
+    func reconnectInvitationReceived(from peer: Peer)
     func messageReceived(_ message: TransferMessage)
     func mediaTransferStarted(transferID: String, totalCount: Int, from peer: Peer)
     func mediaItemReceived(
@@ -33,6 +35,7 @@ final class PeerSessionAdapter: NearbySessionServiceDelegate {
     func didConnect(peer: Peer)                     { events?.peerConnected(peer) }
     func didDisconnect(peer: Peer)                  { events?.peerDisconnected(peer) }
     func didReceiveInvitation(from peer: Peer)      { events?.invitationReceived(from: peer) }
+    func didReceiveReconnectInvitation(from peer: Peer) { events?.reconnectInvitationReceived(from: peer) }
     func didReceive(message: TransferMessage)       { events?.messageReceived(message) }
 
     func didStartReceivingMedia(transferID: String, totalCount: Int, from peer: Peer) {

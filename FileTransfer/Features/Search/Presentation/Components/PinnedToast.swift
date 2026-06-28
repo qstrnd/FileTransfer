@@ -8,6 +8,9 @@ import UIKit
 /// exactly the navigation-bar height — no dependence on SwiftUI safe-area layout.
 struct PinnedToast: UIViewRepresentable {
     let peer: Peer?
+    var message: String = "disconnected"
+    /// When non-nil, overrides the peer-based display and shows a standalone text capsule.
+    var staticMessage: String? = nil
 
     func makeUIView(context: Context) -> UIView {
         let v = UIView()
@@ -17,8 +20,10 @@ struct PinnedToast: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
-        if let peer {
-            context.coordinator.show(peer: peer, anchoredTo: uiView)
+        if let staticMessage {
+            context.coordinator.showStatic(staticMessage, anchoredTo: uiView)
+        } else if let peer {
+            context.coordinator.showPeer(peer, message: message, anchoredTo: uiView)
         } else {
             context.coordinator.hide()
         }
@@ -28,10 +33,26 @@ struct PinnedToast: UIViewRepresentable {
 
     final class Coordinator {
         private var toastWindow: UIWindow?
-        private var shownPeerID: Peer.ID?
+        private var shownKey: AnyHashable?
 
-        func show(peer: Peer, anchoredTo view: UIView) {
-            guard peer.id != shownPeerID,
+        func showPeer(_ peer: Peer, message: String, anchoredTo view: UIView) {
+            show(
+                key: AnyHashable(peer.id),
+                capsule: AnyView(PeerCapsule(peer: peer, message: message)),
+                anchoredTo: view
+            )
+        }
+
+        func showStatic(_ message: String, anchoredTo view: UIView) {
+            show(
+                key: AnyHashable(message),
+                capsule: AnyView(TextCapsule(text: message)),
+                anchoredTo: view
+            )
+        }
+
+        private func show(key: AnyHashable, capsule: AnyView, anchoredTo view: UIView) {
+            guard key != shownKey,
                   let scene = view.window?.windowScene else { return }
             hide()
 
@@ -55,7 +76,7 @@ struct PinnedToast: UIViewRepresentable {
                 translationX: 0, y: -(safeAreaTop + windowHeight + 20))
             window.alpha = 0
 
-            let host = UIHostingController(rootView: ToastCapsule(peer: peer))
+            let host = UIHostingController(rootView: capsule)
             host.view.backgroundColor = .clear
             window.rootViewController = host
             window.isHidden = false
@@ -70,7 +91,7 @@ struct PinnedToast: UIViewRepresentable {
             }
 
             toastWindow = window
-            shownPeerID = peer.id
+            shownKey = key
         }
 
         func hide() {
@@ -88,20 +109,21 @@ struct PinnedToast: UIViewRepresentable {
                 w.isHidden = true
             }
             toastWindow = nil
-            shownPeerID = nil
+            shownKey = nil
         }
     }
 }
 
 // MARK: - Capsule content
 
-private struct ToastCapsule: View {
+private struct PeerCapsule: View {
     let peer: Peer
+    let message: String
 
     var body: some View {
         HStack(spacing: 6) {
             Text(peer.emojiComponent)
-            Text("\(peer.nameComponent) disconnected")
+            Text("\(peer.nameComponent) \(message)")
                 .font(.subheadline.weight(.semibold))
         }
         .padding(.horizontal, 18)
@@ -110,5 +132,20 @@ private struct ToastCapsule: View {
         .shadow(color: .black.opacity(0.28), radius: 20, y: 5)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .padding(.top, 6)
+    }
+}
+
+private struct TextCapsule: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.subheadline.weight(.semibold))
+            .padding(.horizontal, 18)
+            .padding(.vertical, 11)
+            .glassEffect(in: Capsule())
+            .shadow(color: .black.opacity(0.28), radius: 20, y: 5)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .padding(.top, 6)
     }
 }

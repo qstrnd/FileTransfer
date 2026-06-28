@@ -33,6 +33,11 @@ final class SearchViewModel {
     /// Live transfer history — reads directly from the @Observable store.
     var transferHistory: [TransferRecord] { historyStore.records }
 
+    /// Set briefly when a peer auto-reconnects; the receiving side sees their name.
+    var reconnectedPeer: Peer? = nil
+    /// Set briefly when our own connections are restored after going to the foreground.
+    var connectionsRestored: Bool = false
+
     var connectedPeers: [Peer] { peerStates.filter { $0.value == .connected }.map(\.key) }
     var hasConnectedPeers: Bool { !connectedPeers.isEmpty }
 
@@ -47,6 +52,9 @@ final class SearchViewModel {
     private let sessionAdapter = PeerSessionAdapter()
     private let sendMediaUseCase: SendMediaUseCase
     private let sendContactUseCase: SendContactUseCase
+
+    /// Tracks peers we invited with isReconnect=true so peerConnected can show the toast.
+    private var reconnectingPeers: Set<Peer.ID> = []
 
     init(
         emoji: String,
@@ -92,6 +100,7 @@ final class SearchViewModel {
     /// so discovery begins fresh without stale peer state.
     func handleForeground() {
         log.info("handleForeground — resetting session")
+        reconnectingPeers = []
         // Clear state BEFORE stopping so that any async delegate callbacks
         // triggered by session.disconnect() land on an already-clean map
         // and cannot re-set peers to .connected.
@@ -114,16 +123,20 @@ final class SearchViewModel {
     // MARK: - Actions
 
     func connect(to peer: Peer) {
+        initiateConnect(to: peer, isReconnect: false)
+    }
+
+    private func initiateConnect(to peer: Peer, isReconnect: Bool) {
         let current = peerStates[peer] ?? .idle
-        log.info("connect — peer=\(peer.displayName, privacy: .public) currentState=\(String(describing: current), privacy: .public)")
+        log.info("connect — peer=\(peer.displayName, privacy: .public) isReconnect=\(isReconnect) currentState=\(String(describing: current), privacy: .public)")
         guard ConnectionPolicy.canInitiate(from: current),
               let next = current.applying(.initiateConnection) else {
             log.warning("connect — blocked by policy from state \(String(describing: current), privacy: .public)")
             return
         }
         peerStates[peer] = next
-        log.debug("connect — state \(String(describing: current), privacy: .public) → \(String(describing: next), privacy: .public)")
-        service.connect(to: peer)
+        if isReconnect { reconnectingPeers.insert(peer.id) }
+        service.connect(to: peer, isReconnect: isReconnect)
 
         // Failsafe: fires 3 s after the MPC invitation timeout so MPC's own
         // didDisconnect has a chance to set the proper .rejected state first.
@@ -132,6 +145,7 @@ final class SearchViewModel {
             if peerStates[peer] == .connecting {
                 log.warning("connect — failsafe fired for \(peer.displayName, privacy: .public); resetting to idle")
                 withAnimation(.spring(duration: 0.4)) { peerStates[peer] = .idle }
+                reconnectingPeers.remove(peer.id)
             }
         }
     }
@@ -181,6 +195,26 @@ final class SearchViewModel {
         historyStore.add(record)
     }
 
+    // MARK: - Reconnect toasts
+
+    /// Shows the per-peer "NAME is connected" toast — for the receiving side of a reconnect.
+    private func showReconnectedPeerToast(for peer: Peer) {
+        withAnimation { reconnectedPeer = peer }
+        Task {
+            try? await Task.sleep(for: .seconds(3))
+            withAnimation { if reconnectedPeer == peer { reconnectedPeer = nil } }
+        }
+    }
+
+    /// Shows the generic "Connections are restored" toast — for the initiating side.
+    private func showConnectionsRestoredToast() {
+        withAnimation { connectionsRestored = true }
+        Task {
+            try? await Task.sleep(for: .seconds(3))
+            withAnimation { connectionsRestored = false }
+        }
+    }
+
     func disconnect(from peer: Peer) {
         let current = peerStates[peer] ?? .idle
         log.info("disconnect — peer=\(peer.displayName, privacy: .public) currentState=\(String(describing: current), privacy: .public)")
@@ -217,6 +251,25 @@ extension SearchViewModel: PeerSessionEvents {
         log.info("didDiscover — \(peer.displayName, privacy: .public) deviceID=\(peer.deviceID?.uuidString ?? "nil", privacy: .public)")
         guard !discoveredPeers.contains(peer) else { return }
         withAnimation(.spring(duration: 0.35)) { discoveredPeers.append(peer) }
+        maybeAutoReconnect(to: peer)
+    }
+
+    private func maybeAutoReconnect(to peer: Peer) {
+        guard let peerDeviceID = peer.deviceID,
+              connectionHistory.hasConnected(to: peerDeviceID),
+              (peerStates[peer] ?? .idle) == .idle,
+              // Tiebreaker: the device with the higher UUID string initiates to
+              // prevent both sides from sending crossing invitations simultaneously.
+              deviceID.uuidString > peerDeviceID.uuidString else { return }
+
+        log.info("peerDiscovered — scheduling auto-reconnect to \(peer.displayName, privacy: .public)")
+        Task {
+            // Brief settle delay before inviting.
+            try? await Task.sleep(for: .milliseconds(500))
+            guard discoveredPeers.contains(peer), (peerStates[peer] ?? .idle) == .idle else { return }
+            log.info("peerDiscovered — auto-reconnecting to \(peer.displayName, privacy: .public)")
+            initiateConnect(to: peer, isReconnect: true)
+        }
     }
 
     func peerLost(_ peer: Peer) {
@@ -250,9 +303,14 @@ extension SearchViewModel: PeerSessionEvents {
         withAnimation { peerStates[peer] = next }
         connectionHistory.record(peer: peer)
         log.debug("didConnect — state → \(String(describing: next), privacy: .public); history updated")
+
+        if reconnectingPeers.remove(peer.id) != nil {
+            showConnectionsRestoredToast()
+        }
     }
 
     func peerDisconnected(_ peer: Peer) {
+        reconnectingPeers.remove(peer.id)
         let current = peerStates[peer] ?? .idle
         let event: ConnectionEvent = (current == .connecting) ? .connectionDeclined : .peerDisconnected
         log.info("didDisconnect — \(peer.displayName, privacy: .public) currentState=\(String(describing: current), privacy: .public) event=\(String(describing: event), privacy: .public)")
@@ -303,6 +361,20 @@ extension SearchViewModel: PeerSessionEvents {
             try? await Task.sleep(for: .seconds(4))
             withAnimation { expiredInvitationFrom = nil }
         }
+    }
+
+    func reconnectInvitationReceived(from peer: Peer) {
+        log.info("reconnectInvitationReceived — from \(peer.displayName, privacy: .public)")
+        guard let peerDeviceID = peer.deviceID,
+              connectionHistory.hasConnected(to: peerDeviceID) else {
+            log.info("reconnectInvitationReceived — peer not in history, falling back to manual invite for \(peer.displayName, privacy: .public)")
+            invitationReceived(from: peer)
+            return
+        }
+        log.info("reconnectInvitationReceived — auto-accepting for \(peer.displayName, privacy: .public)")
+        withAnimation { peerStates[peer] = .connected }
+        service.acceptInvitation()
+        showReconnectedPeerToast(for: peer)
     }
 
     func messageReceived(_ message: TransferMessage) {
