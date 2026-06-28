@@ -45,11 +45,7 @@ struct ReceivedMediaAlert: View {
     // MARK: - Card
 
     private func alertCard(for transfer: ReceivedMediaTransfer) -> some View {
-        let emoji = String(transfer.senderName.prefix(1))
-        let name: String = {
-            guard let idx = transfer.senderName.firstIndex(of: " ") else { return transfer.senderName }
-            return String(transfer.senderName[transfer.senderName.index(after: idx)...])
-        }()
+        let (emoji, name) = Peer.parseDisplayName(transfer.senderName)
 
         return VStack(spacing: 0) {
             VStack(spacing: 6) {

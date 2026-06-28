@@ -301,14 +301,7 @@ extension SearchViewModel: NearbySessionServiceDelegate {
     func didReceive(message: TransferMessage) {
         log.debug("didReceive — from \(message.senderName, privacy: .public): \(message.text, privacy: .private)")
         receivedMessage = message
-        // senderName is the peer's full displayName: "🦒 Cunning Giraffe"
-        let emoji = String(message.senderName.prefix(1))
-        let name: String
-        if let spaceIdx = message.senderName.firstIndex(of: " ") {
-            name = String(message.senderName[message.senderName.index(after: spaceIdx)...])
-        } else {
-            name = message.senderName
-        }
+        let (emoji, name) = Peer.parseDisplayName(message.senderName)
         addRecord(TransferRecord(
             peerEmoji: emoji,
             peerName: name,
@@ -338,13 +331,7 @@ extension SearchViewModel: NearbySessionServiceDelegate {
 
         let senderName = transfer.senderName
         let orderedURLs = transfer.orderedURLs
-        let emoji = String(peer.displayName.prefix(1))
-        let name: String
-        if let spaceIdx = peer.displayName.firstIndex(of: " ") {
-            name = String(peer.displayName[peer.displayName.index(after: spaceIdx)...])
-        } else {
-            name = peer.displayName
-        }
+        let (emoji, name) = Peer.parseDisplayName(peer.displayName)
         addRecord(TransferRecord(
             peerEmoji: emoji,
             peerName: name,

@@ -27,4 +27,12 @@ extension Peer {
         guard let space = displayName.firstIndex(of: " ") else { return displayName }
         return String(displayName[displayName.index(after: space)...])
     }
+
+    /// Splits any "🐟 Fantastic Fish"-formatted string into (emoji, name).
+    /// Used when a peer is known only by their display-name string rather than a `Peer` value.
+    static func parseDisplayName(_ raw: String) -> (emoji: String, name: String) {
+        let emoji = raw.isEmpty ? "?" : String(raw.prefix(1))
+        guard let space = raw.firstIndex(of: " ") else { return (emoji, raw) }
+        return (emoji, String(raw[raw.index(after: space)...]))
+    }
 }

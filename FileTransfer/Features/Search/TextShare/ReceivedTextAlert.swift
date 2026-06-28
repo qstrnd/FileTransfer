@@ -42,11 +42,7 @@ struct ReceivedTextAlert: View {
     // MARK: - Card
 
     private func alertCard(for message: TransferMessage) -> some View {
-        let emoji = String(message.senderName.prefix(1))
-        let name: String = {
-            guard let idx = message.senderName.firstIndex(of: " ") else { return message.senderName }
-            return String(message.senderName[message.senderName.index(after: idx)...])
-        }()
+        let (emoji, name) = Peer.parseDisplayName(message.senderName)
 
         return VStack(spacing: 0) {
             // Header
