@@ -80,10 +80,11 @@ struct SearchView: View {
         .background(PinnedWindow(
             content: ReceivedMediaAlert(
                 transfer: viewModel.receivedMedia,
+                thumbnailGate: viewModel.thumbnailGate,
                 onDismiss: { viewModel.receivedMedia = nil },
-                onSaveToGallery: { await viewModel.mediaSaveService.saveToGallery($0) },
-                onSaveToFiles:   { viewModel.mediaSaveService.saveToFiles($0) },
-                onShare:         { viewModel.mediaSaveService.share($0) }
+                onSaveToGallery: { await viewModel.mediaSavingGate.saveToGallery($0) },
+                onSaveToFiles:   { viewModel.mediaSavingGate.saveToFiles($0) },
+                onShare:         { viewModel.mediaSavingGate.share($0) }
             ),
             isVisible: viewModel.receivedMedia != nil,
             isInteractive: true,

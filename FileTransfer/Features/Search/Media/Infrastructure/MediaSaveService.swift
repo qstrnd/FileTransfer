@@ -1,12 +1,10 @@
-import UIKit
 import Photos
+import UIKit
 
-/// Handles saving and sharing received media files.
-/// Owns all Photos and UIKit presentation logic so views stay pure.
+/// Concrete MediaSavingGate: persists or shares received media using Photos and UIKit.
 @MainActor
-final class MediaSaveService {
+final class MediaSaveService: MediaSavingGate {
 
-    /// Saves items to the photo library. Returns `true` on success.
     func saveToGallery(_ items: [ReceivedMediaItem]) async -> Bool {
         let fileInfos: [(url: URL, isVideo: Bool)] = items.map { ($0.fileURL, $0.isVideo) }
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
@@ -29,7 +27,6 @@ final class MediaSaveService {
         }
     }
 
-    /// Presents a Files export picker so the user can choose a save location.
     func saveToFiles(_ items: [ReceivedMediaItem]) {
         let urls = items.map(\.fileURL)
         guard !urls.isEmpty, let presenter = topViewController() else { return }
@@ -37,7 +34,6 @@ final class MediaSaveService {
         presenter.present(picker, animated: true)
     }
 
-    /// Opens the system share sheet for the given items.
     func share(_ items: [ReceivedMediaItem]) {
         guard !items.isEmpty, let presenter = topViewController() else { return }
         let activityItems: [Any] = items.map { item in

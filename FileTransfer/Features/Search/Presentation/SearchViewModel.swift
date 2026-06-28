@@ -36,7 +36,8 @@ final class SearchViewModel {
     private let connectionHistory: any ConnectionHistoryStore
     private let historyStore: TransferHistoryStore
     private let onBack: () -> Void
-    let mediaSaveService = MediaSaveService()
+    let mediaSavingGate: any MediaSavingGate
+    let thumbnailGate: any ThumbnailGate
     private let sessionAdapter = PeerSessionAdapter()
 
     init(
@@ -46,6 +47,8 @@ final class SearchViewModel {
         service: any NearbySessionService,
         connectionHistory: any ConnectionHistoryStore,
         historyStore: TransferHistoryStore,
+        mediaSavingGate: any MediaSavingGate = MediaSaveService(),
+        thumbnailGate: any ThumbnailGate = MediaThumbnailService(),
         onBack: @escaping () -> Void
     ) {
         self.emoji = emoji
@@ -54,6 +57,8 @@ final class SearchViewModel {
         self.service = service
         self.connectionHistory = connectionHistory
         self.historyStore = historyStore
+        self.mediaSavingGate = mediaSavingGate
+        self.thumbnailGate = thumbnailGate
         self.onBack = onBack
         self.transferHistory = historyStore.records
         sessionAdapter.events = self
@@ -343,10 +348,7 @@ extension SearchViewModel: PeerSessionEvents {
             detail: "\(transfer.totalCount) item\(transfer.totalCount == 1 ? "" : "s")"
         ))
         Task {
-            var mediaItems: [ReceivedMediaItem] = []
-            for url in orderedURLs {
-                mediaItems.append(await ReceivedMediaItem.load(from: url))
-            }
+            let mediaItems = orderedURLs.map { ReceivedMediaItem(fileURL: $0) }
             // Keep the receiving toast visible for a moment so the user sees
             // the transfer complete before the received-media alert appears.
             try? await Task.sleep(for: .seconds(1.2))

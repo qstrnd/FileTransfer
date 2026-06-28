@@ -3,6 +3,7 @@ import UIKit
 
 struct ReceivedMediaAlert: View {
     let transfer: ReceivedMediaTransfer?
+    let thumbnailGate: any ThumbnailGate
     let onDismiss: () -> Void
     let onSaveToGallery: ([ReceivedMediaItem]) async -> Bool
     let onSaveToFiles: ([ReceivedMediaItem]) -> Void
@@ -118,8 +119,7 @@ struct ReceivedMediaAlert: View {
     @ViewBuilder
     private func mediaSection(for items: [ReceivedMediaItem]) -> some View {
         if items.count == 1, let item = items.first {
-            Image(uiImage: item.thumbnail)
-                .resizable()
+            MediaThumbnailView(item: item, gate: thumbnailGate)
                 .aspectRatio(contentMode: .fit)
                 .frame(maxWidth: .infinity, maxHeight: 300)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -133,8 +133,7 @@ struct ReceivedMediaAlert: View {
                 HStack(spacing: 12) {
                     ForEach(items) { item in
                         ZStack {
-                            Image(uiImage: item.thumbnail)
-                                .resizable()
+                            MediaThumbnailView(item: item, gate: thumbnailGate)
                                 .scaledToFill()
                                 .frame(width: 160, height: 160)
                                 .clipped()
@@ -188,6 +187,28 @@ struct ReceivedMediaAlert: View {
             try? await Task.sleep(for: .seconds(saved ? 1.5 : 0))
             showSavedToast = false
             onDismiss()
+        }
+    }
+}
+
+// MARK: - MediaThumbnailView
+
+private struct MediaThumbnailView: View {
+    let item: ReceivedMediaItem
+    let gate: any ThumbnailGate
+    @State private var image: UIImage?
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image).resizable()
+            } else {
+                Color.gray.opacity(0.15)
+                    .overlay { ProgressView() }
+            }
+        }
+        .task(id: item.id) {
+            image = await gate.thumbnail(for: item.fileURL, isVideo: item.isVideo)
         }
     }
 }
