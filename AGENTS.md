@@ -2,96 +2,164 @@
 
 Read this file before writing or modifying any Swift code. The rules here are enforced via code review and should not be bent for convenience.
 
+> **What this architecture is.** MVVM + ports & adapters, organised around Clean Architecture's dependency rule. We borrow Clean Architecture's layering and its one non-negotiable law (dependencies point inward), but we are not dogmatic about the four-ring diagram. Where this doc and a textbook disagree, this doc wins — and explains why.
+
+---
+
+## The one rule everything else serves
+
+**Source dependencies point only inward.** Outer layers know about inner layers; inner layers never know about outer ones.
+
+```
+        App  ─────────────┐
+                          ▼
+   Presentation ────►  Use Cases ────►  Domain
+                          ▲                ▲
+   Infrastructure ────────┘────────────────┘
+```
+
+Concretely:
+
+- **Domain** depends on nothing (only `Foundation` — see §Import discipline for the exact boundary).
+- **Use Cases** depend on Domain only — entities and gate protocols. Never on Infrastructure or Presentation.
+- **Infrastructure** depends on Domain (implements gate protocols). Never on Use Cases or Presentation.
+- **Presentation** depends on Use Cases and Domain. Never on Infrastructure concrete types.
+- **App** (composition root) depends on everything — the only place that wires concrete Infrastructure to the protocols Use Cases and ViewModels consume.
+
+Two cross-cutting corollaries:
+
+- **Features never depend on each other.** A `Features/A` type may not import or reference a `Features/B` type. Anything shared moves to `Core/`.
+- **Features may depend on `Core/*`**, never the reverse. Core knows nothing about any feature.
+
+If a proposed change satisfies the folder table but violates inward dependency, the rule wins.
+
 ---
 
 ## Folder structure
 
 ```
 FileTransfer/
-├── App/                        # Entry point only — navigation coordinator + root view
+├── App/                        # Composition root: coordinator, root view, DI wiring
 ├── Core/
-│   ├── Domain/                 # Shared entities and service gate protocols
+│   ├── Domain/                 # Shared entities, gate protocols, pure logic
 │   └── Data/                   # Concrete infrastructure shared across features
-└── Features/<Name>/            # One folder per screen / bounded context
+└── Features/<Name>/
     ├── Domain/                 # Feature-scoped entities, gate protocols, pure logic
+    ├── UseCases/               # Feature-scoped workflows orchestrating gates
     ├── Infrastructure/         # Framework adapters and concrete gate implementations
     ├── Presentation/           # Views, ViewModels, Components/
-    └── <SubFeature>/           # Sub-feature with its own Domain / Infrastructure / Presentation
+    └── <SubFeature>/           # Sub-feature with its own Domain / UseCases / Infrastructure / Presentation
 ```
 
-Features that are simple enough may omit the sub-folder split (e.g. Onboarding uses Presentation/ + Infrastructure/ only). Add sub-folders when a feature grows beyond ~3 files per concern.
+Features simple enough may omit sub-folders. Add a folder when a concern grows beyond ~3 files. A feature with no multi-step gate orchestration may omit `UseCases/` — but the moment a ViewModel implements a dependent chain across gates (call A, use result to drive B, handle partial failure), that logic moves to a use case.
 
 ---
 
-## Clean Architecture layers
+## Layers
 
 ### Domain
 
-**What:** Pure Swift. No framework imports (no UIKit, no SwiftUI, no AVFoundation, no Photos, no network). Contains:
-- **Entities** — plain structs or enums modelling business concepts (`Peer`, `MediaItem`, `TransferRecord`)
-- **Gate protocols** — thin interfaces describing what the domain *requires* from the outside world (`NearbySessionService`, `ThumbnailGate`, `MediaSavingGate`)
-- **Pure business logic** — functions or methods with no side effects and no framework dependencies (`ConnectionPolicy`, `Peer.parseDisplayName`)
+**What:** Pure Swift. Contains:
+- **Entities** — plain structs/enums modelling business concepts (`Peer`, `MediaItem`, `TransferRecord`).
+- **Gate protocols** — thin interfaces describing what inner layers require from the outside world (`NearbySessionService`, `ThumbnailGate`, `MediaSavingGate`).
+- **Pure business logic** — side-effect-free functions/methods with no framework dependencies (`ConnectionPolicy`, `Peer.parseDisplayName`).
+- **Domain errors** — the canonical failure vocabulary. Infrastructure maps framework errors into these at the boundary; nothing inward ever sees an `NSError` or framework-specific failure type.
 
 **Rules:**
-- `import Foundation` is allowed. Nothing else.
+- `import Foundation` only. **No UIKit, SwiftUI, AVFoundation, Photos, or any other Apple framework.**
+- `UIImage` is not allowed in Domain — it requires `import UIKit` and is a rendering concern, not a business concept. Gate protocols that deal with image data return `Data`; Presentation converts `Data → UIImage` at the boundary.
 - No `class` unless mutation semantics are required; prefer `struct`.
+- Domain value types and pure functions are `nonisolated` by default. The whole-module `MainActor` isolation is a Presentation/App convenience — Domain opts out so business logic can run anywhere and be tested off the main actor. If you write a domain `class`, mark it `nonisolated` explicitly.
 - No factory methods that touch the filesystem, network, or UI. Those belong in Infrastructure.
-- Gate protocols are defined here even though their concrete implementations live in Infrastructure.
 
-**Platform primitive exception:** `UIImage`, `URL`, and `CGSize` may appear in gate protocol signatures for iOS-only modules where no cross-platform requirement exists. They are considered platform primitives, not framework dependencies. Document any such exception in a comment above the protocol.
+---
+
+### Use Cases
+
+**What:** Stateful, effectful orchestration spanning one or more gates to fulfil an intent.
+
+- Named for the intent: `SendMediaUseCase`, `ConnectToPeerUseCase`.
+- Holds the gate protocols it needs, injected via `init` as `any GateProtocol`.
+- Exposes intent-level methods (`func send(_ items: [MediaItem], to peers: [Peer])`), not gate-level CRUD.
+- May be `@Observable` so a ViewModel can forward its state to the view.
+- Returns Domain types and throws Domain errors. Never leaks a framework type.
+
+**Rules:**
+- Use Cases depend on Domain only. They never `import` a framework and never reference a concrete Infrastructure type.
+- A workflow used by two screens lives in `Core/UseCases/` exactly once.
+- Pure decisions within a workflow delegate to Domain logic (`ConnectionPolicy`), keeping the use case focused on orchestration and side effects.
+- **The threshold for extraction:** a ViewModel that holds two independent gates and routes different user actions to each is fine. Extract to a use case when the ViewModel executes a *dependent chain* — the result of one gate call drives a subsequent call — or when the same multi-step flow would otherwise be duplicated across ViewModels.
 
 ---
 
 ### Infrastructure
 
-**What:** Concrete adapters that satisfy domain gate protocols by interacting with Apple frameworks. Contains:
-- Implementations of gate protocols (`MediaSaveService: MediaSavingGate`, `MediaThumbnailService: ThumbnailGate`)
-- Bridging/adapter types that translate framework callbacks into domain events (`PeerSessionAdapter`, `MediaItemLoader`)
+**What:** Concrete adapters satisfying domain gate protocols by interacting with Apple frameworks.
+- Gate implementations (`MediaSaveService: MediaSavingGate`, `MediaThumbnailService: ThumbnailGate`).
+- Bridging adapters translating framework callbacks into domain events (`PeerSessionAdapter`, `MediaItemLoader`).
+- Framework-error → Domain-error mapping happens here.
 
 **Rules:**
-- Every type here must either implement a domain gate protocol or be a framework adapter with no domain logic.
-- Business logic (policy decisions, state transitions, data transformations) must NOT live here. Extract it to Domain.
-- Infrastructure types must not import each other; they depend on Domain only.
-- **`UIViewRepresentable` is not Infrastructure.** A type that renders UI belongs in Presentation regardless of whether it internally uses UIKit (`UIWindow`, `UITextField`, `UIHostingController`). The deciding question is: *does this type render UI?* If yes → Presentation. If it translates framework events into domain events (no rendering) → Infrastructure.
+- Every type either implements a domain gate protocol or is a framework adapter with no domain logic.
+- Business logic (policy, state transitions, data transformations) must NOT live here — extract to Domain (pure) or Use Cases (orchestration).
+- Infrastructure types collaborate only through Domain gate protocols, never through concrete sibling types.
+- **`UIViewRepresentable` is not Infrastructure.** A type that renders UI belongs in Presentation regardless of whether it internally uses UIKit (`UIWindow`, `UITextField`, `UIHostingController`). Deciding question: *does this type render UI?* Yes → Presentation. Translates framework events into domain events, no rendering → Infrastructure.
 
 ---
 
 ### Presentation
 
-**What:** SwiftUI views, `@Observable` ViewModels, and UIViewControllerRepresentable bridges for picker/sheet UI. Contains:
-- **ViewModel** — `@Observable final class`. Owns all mutable state for a screen. Receives gate protocols via `init`; never instantiates concrete infra types directly.
-- **View** — SwiftUI `View` struct. Depends on its ViewModel (passed as a plain `var`). May depend on gate protocols to pass down to child views that need them.
-- **Components/** — focused sub-views extracted from the main view. No `ViewModel` of their own unless they manage non-trivial independent state.
+**What:** SwiftUI views, `@Observable` ViewModels, and UIViewControllerRepresentable bridges.
+
+- **ViewModel** — `@Observable final class`. Owns mutable view state for a screen and maps between use cases and the view. Receives use cases (and, for trivial single-gate screens, a gate directly) via `init`. Never instantiates concrete Infrastructure types.
+- **View** — SwiftUI `View` struct. Depends on its ViewModel via plain `var`. May pass gates or use cases down to child views explicitly.
+- **Components/** — focused sub-views. No ViewModel of their own unless they manage non-trivial independent state.
 
 **Rules:**
-- ViewModels hold gate protocols by their protocol type (`any ThumbnailGate`), not by the concrete implementation type.
-- Views never import Infrastructure; they receive services through their ViewModel or via explicit parameters.
-- Prefer passing gate instances down the call chain explicitly over `@Environment` unless the gate is truly app-wide.
-- No business logic in views. A view should be able to be replaced with a mock view without breaking any logic.
+- ViewModels hold use cases by type and gates as `any GateProtocol`. Never hold a concrete Infrastructure type.
+- Views never import Infrastructure; they receive services through their ViewModel or explicit parameters.
+- Prefer explicit parameter passing over `@Environment`. The only sanctioned use of `@Environment` is for genuinely app-scoped state that spans multiple screens (e.g. a live session store owned at the composition root).
+- No business logic in views. A view must be replaceable with a mock view without breaking any logic.
 
 ---
 
 ## Gates (ports & adapters)
 
-A **gate** is a protocol defined in Domain that abstracts one infrastructure capability. Each gate has:
-1. A lean protocol in Domain (no implementation detail)
-2. One or more concrete adapters in Infrastructure that `import` the relevant framework and implement the protocol
-3. A ViewModel or use-case in Presentation that holds `any GateProtocol` — injected via `init`
+A **gate** is a protocol that abstracts one infrastructure capability. Anatomy:
 
 ```
-Domain/ThumbnailGate.swift          protocol ThumbnailGate { … }
-Infrastructure/MediaThumbnailService.swift   final class MediaThumbnailService: ThumbnailGate { … }
-Presentation/SearchViewModel.swift   let thumbnailGate: any ThumbnailGate   // injected
+Features/Search/Media/Domain/ThumbnailGate.swift
+    protocol ThumbnailGate { func thumbnail(for url: URL, isVideo: Bool) async -> Data? }
+
+Features/Search/Media/Infrastructure/MediaThumbnailService.swift
+    final class MediaThumbnailService: ThumbnailGate { … }   // imports AVFoundation, UIKit
+
+Features/Search/UseCases/SomeUseCase.swift
+    let thumbnailGate: any ThumbnailGate   // injected via init
 ```
+
+**Gate ownership.** A gate lives in the Domain folder of the layer that consumes it. Feature-specific gates belong in `Features/<Name>/Domain/`, **not** `Core/Domain/`. Promote to `Core/Domain/` only when two or more features genuinely consume the same gate.
 
 **When to create a gate:**
-- When Presentation or Domain needs something that requires a framework import (Photos, AVFoundation, MultipeerConnectivity, CoreData)
-- When a behaviour needs to be mockable for tests
-- When the same capability could plausibly have more than one implementation
+- A use case or ViewModel needs something requiring a framework import (Photos, AVFoundation, MultipeerConnectivity, SwiftData).
+- A behaviour must be mockable for tests.
+- The same capability could plausibly have more than one implementation.
 
 **When NOT to create a gate:**
-- Pure data helpers used only within a single infrastructure type
-- One-line UIKit helpers with no business significance
+- Pure data helpers used only within a single Infrastructure type.
+- One-line UIKit helpers with no business significance.
+
+---
+
+## Persistence & SwiftData
+
+SwiftData `@Model` types are framework-coupled reference types and **cannot live in Domain.**
+
+- **Domain entity** (`TransferRecord`, a plain struct) is the type that flows through Use Cases and Presentation.
+- **Persistence model** (`TransferItem`, the `@Model`) lives in `Core/Data/` and is an implementation detail of a persistence gate.
+- A **persistence gate** (`TransferHistoryGate`) is defined in Domain; its Infrastructure implementation maps Domain ⇄ `@Model` at the boundary.
+
+Nothing inward of Infrastructure ever references a `@Model`. `App` may `import SwiftData` solely to set up the `ModelContainer` at the composition root.
 
 ---
 
@@ -99,11 +167,14 @@ Presentation/SearchViewModel.swift   let thumbnailGate: any ThumbnailGate   // i
 
 | Type | Suffix | Example |
 |---|---|---|
-| Gate protocol | `Gate` | `ThumbnailGate`, `MediaSavingGate` |
+| Gate protocol | `Gate` | `ThumbnailGate`, `MediaSavingGate`, `TransferHistoryGate` |
 | Gate implementation | `Service` or descriptive noun | `MediaThumbnailService`, `MediaSaveService` |
+| Use case / interactor | `UseCase` | `SendMediaUseCase`, `ConnectToPeerUseCase` |
 | Framework adapter (no protocol) | `Adapter` or `Loader` | `PeerSessionAdapter`, `MediaItemLoader` |
 | ViewModel | `ViewModel` | `SearchViewModel` |
-| UIKit bridge (UIViewControllerRepresentable) | descriptive, no suffix | `MediaPickerView`, `EmojiKeyboard` |
+| Domain error | `Error` | `TransferError`, `ConnectionError` |
+| SwiftData model | `Item` (current) / `Model` (new) | `TransferItem` |
+| UIKit bridge (`UIViewControllerRepresentable`) | descriptive, no suffix | `MediaPickerView`, `EmojiKeyboard` |
 | UIKit overlay (window-based) | `Pinned*` | `PinnedToast`, `PinnedWindow` |
 | ViewController extension file | `+<Concern>` | `TransferCurtainViewController+Layout` |
 
@@ -111,7 +182,7 @@ Presentation/SearchViewModel.swift   let thumbnailGate: any ThumbnailGate   // i
 
 ## State management
 
-Use the **Observation framework** exclusively (`@Observable`, `@State`, `@Bindable`). Never use `ObservableObject`, `@Published`, `@StateObject`, or `@ObservedObject`.
+Use the **Observation framework** exclusively. Never use `ObservableObject`, `@Published`, `@StateObject`, or `@ObservedObject`.
 
 | Scenario | Wrapper |
 |---|---|
@@ -119,23 +190,24 @@ Use the **Observation framework** exclusively (`@Observable`, `@State`, `@Bindab
 | View **receives** an `@Observable` from outside | plain `var` |
 | Binding into a locally-owned `@Observable` | `$state.property` |
 | Binding into an externally-provided `@Observable` | `@Bindable var` |
+| App-scoped cross-screen state (live session store) | owned at `App/`, injected down; `@Environment` permitted |
 
 ---
 
 ## Concurrency
 
-The project uses **Swift 6.0 strict concurrency** with `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` — the entire app is implicitly `@MainActor`.
+Swift 6.0 strict concurrency. `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` — the app is implicitly `@MainActor`.
 
+- **Domain opts out.** Domain class types and domain global functions must be `nonisolated`. Value types are already `nonisolated` regardless of the module default.
 - Use `async`/`await` and structured concurrency. Never reach for `DispatchQueue` or completion handlers when an async alternative exists.
-- `nonisolated` is for pure, stateless, thread-safe helpers only.
-- `Task { @MainActor in … }` is only for deferring past the current synchronous scope (e.g. after layout). It is not a substitute for a proper async call chain.
-- Infrastructure types that implement `@MainActor` gate protocols must be `@MainActor` themselves.
+- `Task { @MainActor in … }` is only for deferring past the current synchronous scope (e.g. `becomeFirstResponder` after layout). It is not a substitute for a proper async call chain.
+- Infrastructure types implementing `@MainActor` gate protocols must be `@MainActor` themselves.
 
 ---
 
 ## Xcode project
 
-The project uses `PBXFileSystemSynchronizedRootGroup` (Xcode 16+). **All files on disk inside the project folder are automatically compiled.** Never edit `.xcodeproj` to add or remove files — just create/delete files on disk.
+Uses `PBXFileSystemSynchronizedRootGroup` (Xcode 16+). **All files on disk inside the project folder are automatically compiled.** Never edit `.xcodeproj` to add or remove files — just create/delete files on disk.
 
 ---
 
@@ -143,12 +215,13 @@ The project uses `PBXFileSystemSynchronizedRootGroup` (Xcode 16+). **All files o
 
 | Layer | Allowed imports |
 |---|---|
-| Domain | `Foundation` only (+ platform primitives exception, see §Domain) |
+| Domain | `Foundation` only — no `UIKit`, no `UIImage`, no framework types |
+| Use Cases | `Foundation` only — composes Domain gates, imports no framework |
 | Infrastructure | Any Apple framework required by the adapter |
-| Presentation | `SwiftUI`, `UIKit` (for UIViewControllerRepresentable), `Foundation` |
+| Presentation | `SwiftUI`, `UIKit` (for UIViewControllerRepresentable / UIKit bridges), `Foundation` |
 | App | `SwiftUI`, `Foundation`, `SwiftData` |
 
-Infrastructure and Presentation types must never import each other's sibling files through the module — they communicate through Domain protocols only.
+Infrastructure and Presentation communicate through Domain protocols only — never through concrete sibling imports. Feature → feature imports are forbidden at every layer.
 
 ---
 
@@ -159,23 +232,31 @@ New screen?
   → Features/<Name>/Presentation/  (View + ViewModel)
   → Register in AppCoordinator
 
-New shared entity or protocol?
+Dependent gate chain or multi-step flow?
+  → Features/<Name>/UseCases/   (or Core/UseCases/ if shared across features)
+  → ViewModel calls it; ViewModel does NOT implement the orchestration itself
+
+New shared entity, gate protocol, or domain error (used by 2+ features)?
   → Core/Domain/
 
-New framework-specific implementation of a shared protocol?
+New framework-specific implementation of a shared Core protocol?
   → Core/Data/
 
-New feature-scoped entity or gate protocol?
+New feature-scoped entity, gate protocol, or pure logic?
   → Features/<Name>/Domain/
 
 New framework adapter implementing a feature gate?
   → Features/<Name>/Infrastructure/
 
-New sub-view extracted from a screen view?
+New persistence @Model?
+  → Core/Data/ (or feature Infrastructure)
+  → Expose via a Domain persistence gate; map Domain ⇄ Model at the boundary
+
+New sub-view?
   → Features/<Name>/Presentation/Components/
 
 New UIKit view controller (complex gesture/layout)?
-  → Features/<Name>/Presentation/  (or TransferCurtain/ sub-folder)
+  → Features/<Name>/Presentation/
   → Split into +Layout / +DataSource / +Gesture extensions if > 200 lines
 ```
 
@@ -183,4 +264,4 @@ New UIKit view controller (complex gesture/layout)?
 
 ## Git
 
-Commit after each self-contained, green-building change. Never commit a broken build. Commit messages state *why*, not *what* — the diff already shows what changed.
+Commit after each self-contained, green-building change. Never commit a broken build. Commit messages state *why*, not *what*.
