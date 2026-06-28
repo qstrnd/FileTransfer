@@ -13,3 +13,4 @@ struct OutgoingMediaTransfer: Identifiable {
         completions = min(completions + 1, totalCompletions)
     }
 }
+

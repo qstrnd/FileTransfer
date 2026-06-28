@@ -85,6 +85,20 @@ final class MultipeerNearbyService: NSObject, NearbySessionService {
         try? session.send(data, toPeers: [peerID], with: .reliable)
     }
 
+    func sendContact(data vCardData: Data, to peer: Peer) {
+        guard let session, let peerID = registry.mcPeerID(for: peer.id) else {
+            MultipeerNearbyService.log.warning("sendContact — prerequisites missing for \(peer.displayName, privacy: .public)")
+            return
+        }
+        var payload = Data(Self.contactMagic)
+        payload.append(vCardData)
+        MultipeerNearbyService.log.debug("sendContact \(payload.count)B to \(peer.displayName, privacy: .public)")
+        try? session.send(payload, toPeers: [peerID], with: .reliable)
+    }
+
+    // 0xFF cannot be the first byte of a valid UTF-8 string, making contact payloads unambiguous.
+    nonisolated private static let contactMagic: [UInt8] = [0xFF, 0x63, 0x74]
+
     func sendMedia(_ files: [MediaFileToSend], to peer: Peer, onItemSent: @escaping @MainActor () -> Void) {
         guard let session, let peerID = registry.mcPeerID(for: peer.id) else { return }
         // One transferID per batch — hyphens stripped so "_" stays an unambiguous delimiter.
@@ -138,10 +152,17 @@ extension MultipeerNearbyService: MCSessionDelegate {
     }
 
     nonisolated func session(_ session: MCSession, didReceive data: Data, fromPeer peerID: MCPeerID) {
-        guard let text = String(data: data, encoding: .utf8) else { return }
         MultipeerNearbyService.log.debug("didReceive \(data.count)B from \(peerID.displayName, privacy: .public)")
-        let message = TransferMessage(senderName: peerID.displayName, text: text)
-        Task { @MainActor [weak self] in self?.delegate?.didReceive(message: message) }
+        let magic = Self.contactMagic
+        if data.count > magic.count && data.prefix(magic.count).elementsEqual(magic) {
+            let vCardData = data.dropFirst(magic.count)
+            let peer = registry.peer(for: peerID)
+            Task { @MainActor [weak self] in self?.delegate?.didReceiveContact(data: Data(vCardData), from: peer) }
+        } else {
+            guard let text = String(data: data, encoding: .utf8) else { return }
+            let message = TransferMessage(senderName: peerID.displayName, text: text)
+            Task { @MainActor [weak self] in self?.delegate?.didReceive(message: message) }
+        }
     }
 
     nonisolated func session(_ session: MCSession, didReceive stream: InputStream, withName streamName: String, fromPeer peerID: MCPeerID) {}

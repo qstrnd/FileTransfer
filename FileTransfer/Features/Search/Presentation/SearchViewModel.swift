@@ -1,3 +1,4 @@
+import Contacts
 import Foundation
 import Observation
 import OSLog
@@ -25,6 +26,10 @@ final class SearchViewModel {
     var receivedMedia: ReceivedMediaTransfer? = nil
     /// Forwarded from SendMediaUseCase — observed transitively through @Observable.
     var outgoingMediaTransfer: OutgoingMediaTransfer? { sendMediaUseCase.outgoingTransfer }
+    /// Forwarded from SendContactUseCase — observed transitively through @Observable.
+    var outgoingContactTransfer: OutgoingContactTransfer? { sendContactUseCase.outgoingTransfer }
+    /// Set when a contact payload arrives; cleared when the user dismisses the alert.
+    var receivedContact: ReceivedContactTransfer?
     /// Live transfer history — reads directly from the @Observable store.
     var transferHistory: [TransferRecord] { historyStore.records }
 
@@ -38,8 +43,10 @@ final class SearchViewModel {
     private let onBack: () -> Void
     let mediaSavingGate: any MediaSavingGate
     let thumbnailGate: any ThumbnailGate
+    private let contactShareService = ContactShareService()
     private let sessionAdapter = PeerSessionAdapter()
     private let sendMediaUseCase: SendMediaUseCase
+    private let sendContactUseCase: SendContactUseCase
 
     init(
         emoji: String,
@@ -62,6 +69,7 @@ final class SearchViewModel {
         self.thumbnailGate = thumbnailGate
         self.onBack = onBack
         self.sendMediaUseCase = SendMediaUseCase(session: service, history: historyStore)
+        self.sendContactUseCase = SendContactUseCase(session: service, history: historyStore)
         sessionAdapter.events = self
     }
 
@@ -154,6 +162,19 @@ final class SearchViewModel {
     func abortMediaTransfer() {
         sendMediaUseCase.abort()
         disconnectAll()
+    }
+
+    func sendContacts(_ contacts: [CNContact]) {
+        sendContactUseCase.send(contacts, to: connectedPeers)
+    }
+
+    func abortContactTransfer() {
+        sendContactUseCase.abort()
+    }
+
+    func shareReceivedContact(vCardData: Data) {
+        let name = receivedContact.map { Peer.parseDisplayName($0.senderName).name } ?? ""
+        contactShareService.share(vCardData: vCardData, senderName: name)
     }
 
     private func addRecord(_ record: TransferRecord) {
@@ -301,6 +322,30 @@ extension SearchViewModel: PeerSessionEvents {
         guard receivingMediaTransfer?.id != transferID else { return }
         receivingMediaTransfer = IncomingMediaTransfer(
             id: transferID, senderName: peer.displayName, totalCount: totalCount
+        )
+    }
+
+    func contactReceived(data: Data, from peer: Peer) {
+        guard let rawContacts = try? CNContactVCardSerialization.contacts(with: data) else { return }
+
+        let contactItems = rawContacts.map { contact in
+            let displayName = CNContactFormatter.string(from: contact, style: .fullName) ?? "Unknown"
+            let phones = contact.phoneNumbers.map { $0.value.stringValue }
+            let emails = contact.emailAddresses.map { $0.value as String }
+            return ContactItem(displayName: displayName, phoneNumbers: phones, emailAddresses: emails)
+        }
+
+        let (emoji, name) = Peer.parseDisplayName(peer.displayName)
+        let detail = contactItems.count == 1 ? contactItems[0].displayName : "\(contactItems.count) contacts"
+        addRecord(TransferRecord(
+            peerEmoji: emoji, peerName: name,
+            direction: .received, type: .contact, detail: detail
+        ))
+
+        receivedContact = ReceivedContactTransfer(
+            senderName: peer.displayName,
+            contacts: contactItems,
+            vCardData: data
         )
     }
 

@@ -9,6 +9,7 @@ struct SearchView: View {
     @State private var showDataExchange = false
     @State private var showTextShare = false
     @State private var showMediaPicker = false
+    @State private var showContactPicker = false
     @State private var didBackground = false
     @Environment(\.scenePhase) private var scenePhase
 
@@ -52,7 +53,7 @@ struct SearchView: View {
                 onShareText:     { showTextShare = true },
                 onSharePhoto:    { showMediaPicker = true },
                 onShareDocument: { showDataExchange = true },
-                onShareContact:  { showDataExchange = true }
+                onShareContact:  { showContactPicker = true }
             )
             .ignoresSafeArea()
         }
@@ -91,13 +92,32 @@ struct SearchView: View {
             hideDelay: 0.2
         ))
         .background(PinnedWindow(
-            content: SendingMediaAlert(
-                transfer: viewModel.outgoingMediaTransfer,
+            content: SendingTransferAlert(
+                transfer: viewModel.outgoingMediaTransfer?.sendingStatus,
                 onAbort: { viewModel.abortMediaTransfer() }
             ),
             isVisible: viewModel.outgoingMediaTransfer != nil,
             isInteractive: viewModel.outgoingMediaTransfer != nil,
             hideDelay: 0.45
+        ))
+        .background(PinnedWindow(
+            content: SendingTransferAlert(
+                transfer: viewModel.outgoingContactTransfer?.sendingStatus,
+                onAbort: { viewModel.abortContactTransfer() }
+            ),
+            isVisible: viewModel.outgoingContactTransfer != nil,
+            isInteractive: viewModel.outgoingContactTransfer != nil,
+            hideDelay: 0.45
+        ))
+        .background(PinnedWindow(
+            content: ReceivedContactAlert(
+                transfer: viewModel.receivedContact,
+                onDismiss: { viewModel.receivedContact = nil },
+                onShare: { data in viewModel.shareReceivedContact(vCardData: data) }
+            ),
+            isVisible: viewModel.receivedContact != nil,
+            isInteractive: true,
+            hideDelay: 0.2
         ))
         .sheet(isPresented: $showTextShare) {
             TextShareView(
@@ -120,6 +140,16 @@ struct SearchView: View {
         }
         .fullScreenCover(isPresented: $showDataExchange) {
             DataExchangeView()
+        }
+        .fullScreenCover(isPresented: $showContactPicker) {
+            ContactPickerView(
+                onComplete: { contacts in
+                    showContactPicker = false
+                    if !contacts.isEmpty { viewModel.sendContacts(contacts) }
+                },
+                onCancel: { showContactPicker = false }
+            )
+            .ignoresSafeArea()
         }
         .onAppear {
             viewModel.start()

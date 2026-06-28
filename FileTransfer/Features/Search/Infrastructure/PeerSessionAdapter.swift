@@ -18,6 +18,7 @@ protocol PeerSessionEvents: AnyObject {
         at url: URL, kind: MediaFileKind, fileName: String?,
         from peer: Peer
     )
+    func contactReceived(data: Data, from peer: Peer)
 }
 
 // MARK: - PeerSessionAdapter
@@ -47,5 +48,9 @@ final class PeerSessionAdapter: NearbySessionServiceDelegate {
             transferID: transferID, index: index, totalCount: totalCount,
             at: url, kind: kind, fileName: fileName, from: peer
         )
+    }
+
+    func didReceiveContact(data: Data, from peer: Peer) {
+        events?.contactReceived(data: data, from: peer)
     }
 }
