@@ -47,12 +47,12 @@ Features that are simple enough may omit the sub-folder split (e.g. Onboarding u
 **What:** Concrete adapters that satisfy domain gate protocols by interacting with Apple frameworks. Contains:
 - Implementations of gate protocols (`MediaSaveService: MediaSavingGate`, `MediaThumbnailService: ThumbnailGate`)
 - Bridging/adapter types that translate framework callbacks into domain events (`PeerSessionAdapter`, `MediaItemLoader`)
-- UIKit window management that has no SwiftUI equivalent (`PinnedWindow`, `PinnedToast`)
 
 **Rules:**
 - Every type here must either implement a domain gate protocol or be a framework adapter with no domain logic.
 - Business logic (policy decisions, state transitions, data transformations) must NOT live here. Extract it to Domain.
 - Infrastructure types must not import each other; they depend on Domain only.
+- **`UIViewRepresentable` is not Infrastructure.** A type that renders UI belongs in Presentation regardless of whether it internally uses UIKit (`UIWindow`, `UITextField`, `UIHostingController`). The deciding question is: *does this type render UI?* If yes → Presentation. If it translates framework events into domain events (no rendering) → Infrastructure.
 
 ---
 
