@@ -1,13 +1,6 @@
 import SwiftUI
 import Photos
 import UIKit
-import Foundation
-
-struct ReceivedMediaTransfer: Identifiable {
-    let id = UUID()
-    let senderName: String
-    let items: [ReceivedMediaItem]
-}
 
 struct ReceivedMediaAlert: View {
     let transfer: ReceivedMediaTransfer?
