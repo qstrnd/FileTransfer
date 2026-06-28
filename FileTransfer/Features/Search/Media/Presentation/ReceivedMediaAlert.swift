@@ -126,7 +126,7 @@ struct ReceivedMediaAlert: View {
                 .overlay {
                     if item.isVideo { videoOverlay.clipShape(RoundedRectangle(cornerRadius: 12)) }
                 }
-                .overlay(alignment: .topTrailing) {
+                .overlay(alignment: .topLeading) {
                     if item.isLivePhoto { livePhotoBadge.padding(8) }
                 }
                 .padding(.horizontal, 20)
@@ -135,7 +135,7 @@ struct ReceivedMediaAlert: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(items) { item in
-                        ZStack(alignment: .topTrailing) {
+                        ZStack(alignment: .topLeading) {
                             MediaThumbnailView(item: item, gate: thumbnailGate)
                                 .scaledToFill()
                                 .frame(width: 160, height: 160)
