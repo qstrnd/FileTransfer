@@ -2,7 +2,7 @@ import SwiftData
 import Foundation
 
 @Observable
-final class TransferHistoryStore {
+final class TransferHistoryStore: TransferHistoryGate {
     private(set) var records: [TransferRecord] = []
     private let context: ModelContext
 

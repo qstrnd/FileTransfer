@@ -23,10 +23,10 @@ final class SearchViewModel {
     var receivingMediaTransfer: IncomingMediaTransfer? = nil
     /// Set when all items of a media transfer arrive; cleared when user dismisses.
     var receivedMedia: ReceivedMediaTransfer? = nil
-    /// Set while media is being sent; cleared on completion or abort.
-    var outgoingMediaTransfer: OutgoingMediaTransfer? = nil
-    /// Live transfer history sourced from persistent storage.
-    private(set) var transferHistory: [TransferRecord] = []
+    /// Forwarded from SendMediaUseCase — observed transitively through @Observable.
+    var outgoingMediaTransfer: OutgoingMediaTransfer? { sendMediaUseCase.outgoingTransfer }
+    /// Live transfer history — reads directly from the @Observable store.
+    var transferHistory: [TransferRecord] { historyStore.records }
 
     var connectedPeers: [Peer] { peerStates.filter { $0.value == .connected }.map(\.key) }
     var hasConnectedPeers: Bool { !connectedPeers.isEmpty }
@@ -39,6 +39,7 @@ final class SearchViewModel {
     let mediaSavingGate: any MediaSavingGate
     let thumbnailGate: any ThumbnailGate
     private let sessionAdapter = PeerSessionAdapter()
+    private let sendMediaUseCase: SendMediaUseCase
 
     init(
         emoji: String,
@@ -60,7 +61,7 @@ final class SearchViewModel {
         self.mediaSavingGate = mediaSavingGate
         self.thumbnailGate = thumbnailGate
         self.onBack = onBack
-        self.transferHistory = historyStore.records
+        self.sendMediaUseCase = SendMediaUseCase(session: service, history: historyStore)
         sessionAdapter.events = self
     }
 
@@ -147,39 +148,16 @@ final class SearchViewModel {
     }
 
     func sendMedia(_ items: [MediaItem]) {
-        guard !items.isEmpty else { return }
-        let peers = connectedPeers
-        guard !peers.isEmpty else { return }
-        let fileURLs = items.map(\.fileURL)
-        outgoingMediaTransfer = OutgoingMediaTransfer(totalItems: fileURLs.count, peerCount: peers.count)
-        for peer in peers {
-            service.sendMedia(fileURLs: fileURLs, to: peer) { [weak self] in
-                self?.outgoingMediaTransfer?.recordCompletion()
-                if self?.outgoingMediaTransfer?.isComplete == true {
-                    Task { @MainActor [weak self] in
-                        try? await Task.sleep(for: .seconds(1.5))
-                        self?.outgoingMediaTransfer = nil
-                    }
-                }
-            }
-            addRecord(TransferRecord(
-                peerEmoji: peer.emojiComponent,
-                peerName: peer.nameComponent,
-                direction: .sent,
-                type: .photo,
-                detail: "\(items.count) item\(items.count == 1 ? "" : "s")"
-            ))
-        }
+        sendMediaUseCase.send(items, to: connectedPeers)
     }
 
     func abortMediaTransfer() {
-        outgoingMediaTransfer = nil
+        sendMediaUseCase.abort()
         disconnectAll()
     }
 
     private func addRecord(_ record: TransferRecord) {
         historyStore.add(record)
-        transferHistory = historyStore.records
     }
 
     func disconnect(from peer: Peer) {
