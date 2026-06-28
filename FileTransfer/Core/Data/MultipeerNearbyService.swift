@@ -69,6 +69,14 @@ final class MultipeerNearbyService: NSObject, NearbySessionService {
         browser.invitePeer(peerID, to: session, withContext: context, timeout: mcInvitationTimeout)
     }
 
+    func sendPing(to peer: Peer) { sendControlBytes(Self.pingMagic, to: peer) }
+    func sendPong(to peer: Peer) { sendControlBytes(Self.pongMagic, to: peer) }
+
+    private func sendControlBytes(_ bytes: [UInt8], to peer: Peer) {
+        guard let session, let peerID = registry.mcPeerID(for: peer.id) else { return }
+        try? session.send(Data(bytes), toPeers: [peerID], with: .reliable)
+    }
+
     func disconnect(from peer: Peer) {
         MultipeerNearbyService.log.info("disconnect — severing session for \(peer.displayName, privacy: .public) (MCSession has no per-peer API)")
         // session.disconnect() severs all active peers and fires .notConnected
@@ -99,6 +107,8 @@ final class MultipeerNearbyService: NSObject, NearbySessionService {
 
     // 0xFF cannot be the first byte of a valid UTF-8 string, making all control payloads unambiguous.
     nonisolated private static let contactMagic: [UInt8] = [0xFF, 0x63, 0x74]  // 'c','t'
+    nonisolated private static let pingMagic:    [UInt8] = [0xFF, 0x70, 0x69]  // 'p','i'
+    nonisolated private static let pongMagic:    [UInt8] = [0xFF, 0x70, 0x6F]  // 'p','o'
     // Context byte sent with reconnect invitations so the receiver can auto-accept.
     nonisolated private static let reconnectContext = Data([0xFE, 0x52])        // 0xFE + 'R'
 
@@ -160,6 +170,10 @@ extension MultipeerNearbyService: MCSessionDelegate {
         if data.count > Self.contactMagic.count && data.prefix(Self.contactMagic.count).elementsEqual(Self.contactMagic) {
             let vCardData = data.dropFirst(Self.contactMagic.count)
             Task { @MainActor [weak self] in self?.delegate?.didReceiveContact(data: Data(vCardData), from: peer) }
+        } else if data.elementsEqual(Self.pingMagic) {
+            Task { @MainActor [weak self] in self?.delegate?.didReceivePing(from: peer) }
+        } else if data.elementsEqual(Self.pongMagic) {
+            Task { @MainActor [weak self] in self?.delegate?.didReceivePong(from: peer) }
         } else if let text = String(data: data, encoding: .utf8) {
             let message = TransferMessage(senderName: peerID.displayName, text: text)
             Task { @MainActor [weak self] in self?.delegate?.didReceive(message: message) }

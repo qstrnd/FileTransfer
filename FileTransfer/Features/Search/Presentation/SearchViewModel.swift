@@ -55,6 +55,9 @@ final class SearchViewModel {
 
     /// Tracks peers we invited with isReconnect=true so peerConnected can show the toast.
     private var reconnectingPeers: Set<Peer.ID> = []
+    /// Tracks the last received pong timestamp per peer for keepalive detection.
+    private var lastPongReceived: [Peer.ID: Date] = [:]
+    private var keepaliveTask: Task<Void, Never>?
 
     init(
         emoji: String,
@@ -87,10 +90,12 @@ final class SearchViewModel {
         log.info("start — emoji=\(self.emoji, privacy: .public) deviceID=\(self.deviceID, privacy: .public)")
         service.delegate = sessionAdapter
         service.start(displayName: "\(emoji) \(name)", deviceID: deviceID)
+        startKeepalive()
     }
 
     func stop() {
         log.info("stop")
+        stopKeepalive()
         service.delegate = nil
         service.stop()
     }
@@ -101,6 +106,7 @@ final class SearchViewModel {
     func handleForeground() {
         log.info("handleForeground — resetting session")
         reconnectingPeers = []
+        lastPongReceived = [:]
         // Clear state BEFORE stopping so that any async delegate callbacks
         // triggered by session.disconnect() land on an already-clean map
         // and cannot re-set peers to .connected.
@@ -193,6 +199,37 @@ final class SearchViewModel {
 
     private func addRecord(_ record: TransferRecord) {
         historyStore.add(record)
+    }
+
+    // MARK: - Keepalive
+
+    private func startKeepalive() {
+        keepaliveTask?.cancel()
+        keepaliveTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(20))
+                guard !Task.isCancelled else { return }
+                checkKeepalive()
+            }
+        }
+    }
+
+    private func stopKeepalive() {
+        keepaliveTask?.cancel()
+        keepaliveTask = nil
+        lastPongReceived = [:]
+    }
+
+    private func checkKeepalive() {
+        let now = Date.now
+        for peer in connectedPeers {
+            if let last = lastPongReceived[peer.id], now.timeIntervalSince(last) > 50 {
+                log.warning("keepalive — no pong from \(peer.displayName, privacy: .public), disconnecting")
+                service.disconnect(from: peer)
+            } else {
+                service.sendPing(to: peer)
+            }
+        }
     }
 
     // MARK: - Reconnect toasts
@@ -293,6 +330,8 @@ extension SearchViewModel: PeerSessionEvents {
             return
         }
 
+        lastPongReceived[peer.id] = .now
+
         if preState == .connected {
             // Receiving side already set .connected in acceptInvitation.
             connectionHistory.record(peer: peer)
@@ -310,6 +349,7 @@ extension SearchViewModel: PeerSessionEvents {
     }
 
     func peerDisconnected(_ peer: Peer) {
+        lastPongReceived.removeValue(forKey: peer.id)
         reconnectingPeers.remove(peer.id)
         let current = peerStates[peer] ?? .idle
         let event: ConnectionEvent = (current == .connecting) ? .connectionDeclined : .peerDisconnected
@@ -375,6 +415,14 @@ extension SearchViewModel: PeerSessionEvents {
         withAnimation { peerStates[peer] = .connected }
         service.acceptInvitation()
         showReconnectedPeerToast(for: peer)
+    }
+
+    func peerPinged(_ peer: Peer) {
+        service.sendPong(to: peer)
+    }
+
+    func peerPonged(_ peer: Peer) {
+        lastPongReceived[peer.id] = .now
     }
 
     func messageReceived(_ message: TransferMessage) {

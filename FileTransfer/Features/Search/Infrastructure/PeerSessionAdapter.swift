@@ -21,6 +21,8 @@ protocol PeerSessionEvents: AnyObject {
         from peer: Peer
     )
     func contactReceived(data: Data, from peer: Peer)
+    func peerPinged(_ peer: Peer)
+    func peerPonged(_ peer: Peer)
 }
 
 // MARK: - PeerSessionAdapter
@@ -37,6 +39,8 @@ final class PeerSessionAdapter: NearbySessionServiceDelegate {
     func didReceiveInvitation(from peer: Peer)      { events?.invitationReceived(from: peer) }
     func didReceiveReconnectInvitation(from peer: Peer) { events?.reconnectInvitationReceived(from: peer) }
     func didReceive(message: TransferMessage)       { events?.messageReceived(message) }
+    func didReceivePing(from peer: Peer)            { events?.peerPinged(peer) }
+    func didReceivePong(from peer: Peer)            { events?.peerPonged(peer) }
 
     func didStartReceivingMedia(transferID: String, totalCount: Int, from peer: Peer) {
         events?.mediaTransferStarted(transferID: transferID, totalCount: totalCount, from: peer)
