@@ -9,8 +9,8 @@ struct IncomingMediaTransfer: Identifiable {
 
     // MARK: - Progress
 
-    /// Number of logical items whose primary file (still or regular) has arrived.
-    var receivedCount: Int { slots.count }
+    /// Number of fully-received logical items (both LP components must be present).
+    var receivedCount: Int { slots.values.filter(\.isComplete).count }
 
     /// True when every logical item — and every LP companion video — has arrived.
     var isComplete: Bool {

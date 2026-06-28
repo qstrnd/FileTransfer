@@ -126,7 +126,7 @@ struct ReceivedMediaAlert: View {
                 .overlay {
                     if item.isVideo { videoOverlay.clipShape(RoundedRectangle(cornerRadius: 12)) }
                 }
-                .overlay(alignment: .topLeading) {
+                .overlay(alignment: .topTrailing) {
                     if item.isLivePhoto { livePhotoBadge.padding(8) }
                 }
                 .padding(.horizontal, 20)
@@ -135,7 +135,7 @@ struct ReceivedMediaAlert: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(items) { item in
-                        ZStack(alignment: .topLeading) {
+                        ZStack(alignment: .topTrailing) {
                             MediaThumbnailView(item: item, gate: thumbnailGate)
                                 .scaledToFill()
                                 .frame(width: 160, height: 160)
@@ -158,11 +158,16 @@ struct ReceivedMediaAlert: View {
     }
 
     private var livePhotoBadge: some View {
-        Image(systemName: "livephoto")
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(.white)
-            .padding(5)
-            .background(.ultraThinMaterial, in: Circle())
+        HStack(spacing: 3) {
+            Image(systemName: "livephoto")
+                .font(.system(size: 12, weight: .semibold))
+            Text("LIVE")
+                .font(.system(size: 11, weight: .bold))
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 4)
+        .background(.ultraThinMaterial, in: Capsule())
     }
 
     private var videoOverlay: some View {

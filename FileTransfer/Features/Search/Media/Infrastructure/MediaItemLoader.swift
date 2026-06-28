@@ -5,9 +5,17 @@ import UniformTypeIdentifiers
 /// and extracting Live Photo pairs.
 ///
 /// Detection order:
-///   1. Live Photo (`UTType.livePhoto`) — loads still + companion video concurrently
-///   2. Regular video (`UTType.movie`)
+///   1. Live Photo  — provider has both an image type AND com.apple.quicktime-movie
+///   2. Regular video — provider has a movie type only
 ///   3. Regular image — tries image types in descending specificity
+///
+/// Why this detection?
+/// `hasItemConformingToTypeIdentifier(UTType.livePhoto)` is unreliable because
+/// UTType.livePhoto is the PHLivePhoto *object* type, not a file-representation type.
+/// PHPickerResult providers filtered by .images expose `com.apple.quicktime-movie`
+/// for the LP companion but not necessarily `com.apple.live-photo`. Checking for
+/// the co-presence of an image type and `com.apple.quicktime-movie` is the reliable
+/// signal — that combination is only present for Live Photos.
 enum MediaItemLoader {
 
     /// Image UTTypes tried in descending specificity so we get the original
@@ -20,15 +28,20 @@ enum MediaItemLoader {
 
     static func load(from result: PHPickerResult) async -> MediaItem? {
         let provider = result.itemProvider
-        let suggestedName = provider.suggestedName   // e.g. "IMG_1234", no extension
+        let suggestedName = provider.suggestedName
+        let registered = provider.registeredTypeIdentifiers
 
-        if provider.hasItemConformingToTypeIdentifier(UTType.livePhoto.identifier) {
+        let hasImageType = registered.contains { UTType($0)?.conforms(to: .image) == true }
+        let hasMovieType = registered.contains { UTType($0)?.conforms(to: .movie) == true }
+
+        // Live Photo: provides BOTH a still image representation AND a QuickTime companion.
+        if hasImageType && hasMovieType {
             return await loadLivePhoto(from: provider, suggestedName: suggestedName)
-        } else if provider.hasItemConformingToTypeIdentifier(UTType.movie.identifier) {
+        } else if hasMovieType {
             guard let url = await loadFile(from: provider, typeIdentifier: UTType.movie.identifier) else { return nil }
             return MediaItem(fileURL: url, isVideo: true, livePhotoVideoURL: nil, fileName: suggestedName)
         } else {
-            let typeID = preferredImageTypeIdentifier(among: provider.registeredTypeIdentifiers)
+            let typeID = preferredImageTypeIdentifier(among: registered)
             guard let url = await loadFile(from: provider, typeIdentifier: typeID) else { return nil }
             return MediaItem(fileURL: url, isVideo: false, livePhotoVideoURL: nil, fileName: suggestedName)
         }
@@ -50,11 +63,14 @@ enum MediaItemLoader {
 
     private static func loadLivePhoto(from provider: NSItemProvider, suggestedName: String?) async -> MediaItem? {
         let imageTypeID = preferredImageTypeIdentifier(among: provider.registeredTypeIdentifiers)
-        // Sequential: NSItemProvider is not Sendable, so concurrent async-let captures are
-        // rejected by Swift 6 strict concurrency. Loading locally is fast enough.
         let stillURL = await loadFile(from: provider, typeIdentifier: imageTypeID)
-        let videoURL = await loadFile(from: provider, typeIdentifier: UTType.movie.identifier)
+
+        // The companion is registered as com.apple.quicktime-movie (specific).
+        // loadFileRepresentation needs the exact registered identifier, not a supertype.
+        let videoURL = await loadFile(from: provider, typeIdentifier: UTType.quickTimeMovie.identifier)
+
         guard let stillURL else { return nil }
+        // If the companion load failed for any reason, fall back to a plain still.
         return MediaItem(fileURL: stillURL, isVideo: false, livePhotoVideoURL: videoURL, fileName: suggestedName)
     }
 
@@ -68,7 +84,7 @@ enum MediaItemLoader {
                     return
                 }
                 let ext = srcURL.pathExtension.isEmpty
-                    ? (typeIdentifier == UTType.movie.identifier ? "mov" : "jpg")
+                    ? (typeIdentifier == UTType.quickTimeMovie.identifier ? "mov" : "jpg")
                     : srcURL.pathExtension.lowercased()
                 let dest = FileManager.default.temporaryDirectory
                     .appendingPathComponent(UUID().uuidString + "." + ext)
