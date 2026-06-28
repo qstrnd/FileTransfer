@@ -1,25 +1,30 @@
+import Photos
 import PhotosUI
 import UniformTypeIdentifiers
+import OSLog
 
 /// Loads a MediaItem from a PHPickerResult, preserving the original file format
 /// and extracting Live Photo pairs.
 ///
 /// Detection order:
-///   1. Live Photo  — provider has both an image type AND com.apple.quicktime-movie
-///   2. Regular video — provider has a movie type only
-///   3. Regular image — tries image types in descending specificity
+///   1. Live Photo — provider exposes "com.apple.live-photo" OR has both an image
+///      type and a movie type in registeredTypeIdentifiers
+///   2. Regular video
+///   3. Regular image
 ///
-/// Why this detection?
-/// `hasItemConformingToTypeIdentifier(UTType.livePhoto)` is unreliable because
-/// UTType.livePhoto is the PHLivePhoto *object* type, not a file-representation type.
-/// PHPickerResult providers filtered by .images expose `com.apple.quicktime-movie`
-/// for the LP companion but not necessarily `com.apple.live-photo`. Checking for
-/// the co-presence of an image type and `com.apple.quicktime-movie` is the reliable
-/// signal — that combination is only present for Live Photos.
+/// LP extraction tries two paths:
+///   A. loadFileRepresentation for still + UTType.quickTimeMovie companion (fast)
+///   B. loadObject(PHLivePhoto) + PHAssetResourceManager.writeData (reliable fallback)
+///
+/// Path B is the Apple-recommended approach for PHPickerResult and works regardless
+/// of which type identifiers the provider exposes for the companion video.
 enum MediaItemLoader {
 
-    /// Image UTTypes tried in descending specificity so we get the original
-    /// encoded file (HEIC/JPEG/…) rather than a decoded or re-compressed copy.
+    nonisolated private static let log = Logger(
+        subsystem: "com.qstrnd.FileTransfer", category: "MediaItemLoader"
+    )
+
+    /// Image UTTypes tried in descending specificity.
     nonisolated static let preferredImageTypes: [UTType] = [
         .heic, .jpeg, .png, .gif, .tiff, .webP, .image,
     ]
@@ -31,11 +36,14 @@ enum MediaItemLoader {
         let suggestedName = provider.suggestedName
         let registered = provider.registeredTypeIdentifiers
 
+        log.debug("load — suggestedName=\(suggestedName ?? "nil", privacy: .public) registered=\(registered.joined(separator: ","), privacy: .public)")
+
+        let hasLivePhotoType = registered.contains("com.apple.live-photo")
         let hasImageType = registered.contains { UTType($0)?.conforms(to: .image) == true }
         let hasMovieType = registered.contains { UTType($0)?.conforms(to: .movie) == true }
 
-        // Live Photo: provides BOTH a still image representation AND a QuickTime companion.
-        if hasImageType && hasMovieType {
+        if hasLivePhotoType || (hasImageType && hasMovieType) {
+            log.debug("load — LP branch (hasLivePhotoType=\(hasLivePhotoType) hasImage=\(hasImageType) hasMovie=\(hasMovieType))")
             return await loadLivePhoto(from: provider, suggestedName: suggestedName)
         } else if hasMovieType {
             guard let url = await loadFile(from: provider, typeIdentifier: UTType.movie.identifier) else { return nil }
@@ -47,35 +55,113 @@ enum MediaItemLoader {
         }
     }
 
-    /// Returns the best type identifier among `registeredIdentifiers` for preserving
-    /// the original image format. `internal` so it can be unit-tested.
     nonisolated static func preferredImageTypeIdentifier(among registeredIdentifiers: [String]) -> String {
         for candidate in preferredImageTypes {
-            let match = registeredIdentifiers.contains {
-                UTType($0)?.conforms(to: candidate) == true
+            if registeredIdentifiers.contains(where: { UTType($0)?.conforms(to: candidate) == true }) {
+                return candidate.identifier
             }
-            if match { return candidate.identifier }
         }
         return UTType.image.identifier
     }
 
-    // MARK: - Private
+    // MARK: - Live Photo
 
     private static func loadLivePhoto(from provider: NSItemProvider, suggestedName: String?) async -> MediaItem? {
+        // Fast path A: direct file-representation loading.
         let imageTypeID = preferredImageTypeIdentifier(among: provider.registeredTypeIdentifiers)
         let stillURL = await loadFile(from: provider, typeIdentifier: imageTypeID)
-
-        // The companion is registered as com.apple.quicktime-movie (specific).
-        // loadFileRepresentation needs the exact registered identifier, not a supertype.
         let videoURL = await loadFile(from: provider, typeIdentifier: UTType.quickTimeMovie.identifier)
 
-        guard let stillURL else { return nil }
-        // If the companion load failed for any reason, fall back to a plain still.
-        return MediaItem(fileURL: stillURL, isVideo: false, livePhotoVideoURL: videoURL, fileName: suggestedName)
+        log.debug("LP path A — still=\(stillURL?.lastPathComponent ?? "nil", privacy: .public) video=\(videoURL?.lastPathComponent ?? "nil", privacy: .public)")
+
+        if let stillURL {
+            if videoURL == nil {
+                log.debug("LP path A — companion nil; trying path B (PHAssetResourceManager)")
+                // Still loaded but companion failed — try the object-based fallback for the
+                // companion only. Re-use the already-loaded still to avoid a double load.
+                let companionURL = await loadLPCompanionViaObject(from: provider)
+                log.debug("LP path B companion=\(companionURL?.lastPathComponent ?? "nil", privacy: .public)")
+                return MediaItem(fileURL: stillURL, isVideo: false, livePhotoVideoURL: companionURL, fileName: suggestedName)
+            }
+            return MediaItem(fileURL: stillURL, isVideo: false, livePhotoVideoURL: videoURL, fileName: suggestedName)
+        }
+
+        // Path A failed entirely — fall back to PHLivePhoto object approach.
+        log.debug("LP path A failed entirely; falling back to path B (PHLivePhoto object)")
+        return await loadLivePhotoViaObject(from: provider, suggestedName: suggestedName)
     }
 
-    /// Copies the provider's file representation to a stable temp URL and returns it.
-    /// The `srcURL` given to the completion handler is only valid during the callback.
+    /// Extracts both LP components via `PHLivePhoto` + `PHAssetResourceManager`.
+    /// This is the Apple-documented approach for PHPickerResult and does not require
+    /// full Photos library authorisation beyond what the picker grants.
+    private static func loadLivePhotoViaObject(
+        from provider: NSItemProvider, suggestedName: String?
+    ) async -> MediaItem? {
+        guard let livePhoto = await loadPHLivePhoto(from: provider) else {
+            log.debug("LP path B — PHLivePhoto load failed")
+            return nil
+        }
+        let resources = PHAssetResource.assetResources(for: livePhoto)
+        log.debug("LP path B resources=\(resources.map { "\($0.type.rawValue):\($0.originalFilename)" }.joined(separator: ","), privacy: .public)")
+
+        guard let imageRes = resources.first(where: { $0.type == .photo }) else { return nil }
+        let videoRes = resources.first(where: { $0.type == .pairedVideo })
+
+        let stillExt = (imageRes.originalFilename as NSString).pathExtension.lowercased()
+        let stillDest = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + "." + (stillExt.isEmpty ? "heic" : stillExt))
+
+        guard await writeResource(imageRes, to: stillDest) else {
+            log.debug("LP path B — still write failed")
+            return nil
+        }
+
+        var videoDest: URL?
+        if let videoRes {
+            let videoExt = (videoRes.originalFilename as NSString).pathExtension.lowercased()
+            let dest = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString + "." + (videoExt.isEmpty ? "mov" : videoExt))
+            if await writeResource(videoRes, to: dest) { videoDest = dest }
+            else { log.debug("LP path B — companion write failed") }
+        }
+
+        return MediaItem(fileURL: stillDest, isVideo: false, livePhotoVideoURL: videoDest, fileName: suggestedName)
+    }
+
+    /// Extracts just the LP companion video via PHAssetResourceManager.
+    /// Used when path A already gave us the still but not the companion.
+    private static func loadLPCompanionViaObject(from provider: NSItemProvider) async -> URL? {
+        guard let livePhoto = await loadPHLivePhoto(from: provider) else { return nil }
+        let resources = PHAssetResource.assetResources(for: livePhoto)
+        guard let videoRes = resources.first(where: { $0.type == .pairedVideo }) else { return nil }
+        let ext = (videoRes.originalFilename as NSString).pathExtension.lowercased()
+        let dest = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + "." + (ext.isEmpty ? "mov" : ext))
+        return await writeResource(videoRes, to: dest) ? dest : nil
+    }
+
+    // MARK: - Helpers
+
+    private static func loadPHLivePhoto(from provider: NSItemProvider) async -> PHLivePhoto? {
+        await withCheckedContinuation { continuation in
+            _ = provider.loadObject(ofClass: PHLivePhoto.self) { object, error in
+                if let error { Logger(subsystem: "com.qstrnd.FileTransfer", category: "MediaItemLoader")
+                    .debug("loadPHLivePhoto error: \(error.localizedDescription, privacy: .public)") }
+                continuation.resume(returning: object as? PHLivePhoto)
+            }
+        }
+    }
+
+    private static func writeResource(_ resource: PHAssetResource, to url: URL) async -> Bool {
+        await withCheckedContinuation { continuation in
+            let options = PHAssetResourceRequestOptions()
+            options.isNetworkAccessAllowed = true
+            PHAssetResourceManager.default().writeData(for: resource, toFile: url, options: options) { error in
+                continuation.resume(returning: error == nil)
+            }
+        }
+    }
+
     private static func loadFile(from provider: NSItemProvider, typeIdentifier: String) async -> URL? {
         await withCheckedContinuation { continuation in
             provider.loadFileRepresentation(forTypeIdentifier: typeIdentifier) { url, error in

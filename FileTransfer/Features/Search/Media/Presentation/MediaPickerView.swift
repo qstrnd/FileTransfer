@@ -8,7 +8,7 @@ struct MediaPickerView: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> PHPickerViewController {
         var config = PHPickerConfiguration(photoLibrary: .shared())
         config.selectionLimit = 0
-        config.filter = .any(of: [.images, .videos])
+        config.filter = .any(of: [.images, .videos, .livePhotos])
         let picker = PHPickerViewController(configuration: config)
         picker.delegate = context.coordinator
         return picker
