@@ -304,19 +304,23 @@ extension SearchViewModel: PeerSessionEvents {
         )
     }
 
-    func mediaItemReceived(transferID: String, index: Int, totalCount: Int, at url: URL, from peer: Peer) {
+    func mediaItemReceived(
+        transferID: String, index: Int, totalCount: Int,
+        at url: URL, kind: MediaFileKind, fileName: String?,
+        from peer: Peer
+    ) {
         if receivingMediaTransfer == nil || receivingMediaTransfer?.id != transferID {
             receivingMediaTransfer = IncomingMediaTransfer(
                 id: transferID, senderName: peer.displayName, totalCount: totalCount
             )
         }
-        receivingMediaTransfer?.add(url: url, at: index)
+        receivingMediaTransfer?.add(url: url, at: index, kind: kind, fileName: fileName)
 
         guard receivingMediaTransfer?.isComplete == true,
               let transfer = receivingMediaTransfer else { return }
 
         let senderName = transfer.senderName
-        let orderedURLs = transfer.orderedURLs
+        let items = transfer.buildItems(transferID: transferID)
         let (emoji, name) = Peer.parseDisplayName(peer.displayName)
         addRecord(TransferRecord(
             peerEmoji: emoji,
@@ -326,12 +330,11 @@ extension SearchViewModel: PeerSessionEvents {
             detail: "\(transfer.totalCount) item\(transfer.totalCount == 1 ? "" : "s")"
         ))
         Task {
-            let mediaItems = orderedURLs.map { ReceivedMediaItem(fileURL: $0) }
             // Keep the receiving toast visible for a moment so the user sees
             // the transfer complete before the received-media alert appears.
             try? await Task.sleep(for: .seconds(1.2))
             receivingMediaTransfer = nil
-            receivedMedia = ReceivedMediaTransfer(senderName: senderName, items: mediaItems)
+            receivedMedia = ReceivedMediaTransfer(senderName: senderName, items: items)
         }
     }
 }

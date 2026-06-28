@@ -1,12 +1,9 @@
 import Foundation
 import Observation
 
-/// Orchestrates an outgoing media transfer: sends files to every connected peer,
-/// tracks per-item completions, and auto-clears the transfer state after a brief
-/// success window.
-///
-/// This is the first example of the Use Case layer — it replaces orchestration
-/// that previously lived inside SearchViewModel.sendMedia() / abortMediaTransfer().
+/// Orchestrates an outgoing media transfer: flattens MediaItems (including Live Photo
+/// pairs) into a file list, sends to every connected peer, tracks per-file completions,
+/// and auto-clears the transfer state after a brief success window.
 @Observable
 @MainActor
 final class SendMediaUseCase {
@@ -25,11 +22,33 @@ final class SendMediaUseCase {
 
     func send(_ items: [MediaItem], to peers: [Peer]) {
         guard !items.isEmpty, !peers.isEmpty else { return }
-        let fileURLs = items.map(\.fileURL)
-        outgoingTransfer = OutgoingMediaTransfer(totalItems: fileURLs.count, peerCount: peers.count)
+
+        let logicalTotal = items.count
+        var files: [MediaFileToSend] = []
+        for (idx, item) in items.enumerated() {
+            if let lpVideoURL = item.livePhotoVideoURL {
+                // Live Photo: send the still first, then the companion video.
+                files.append(MediaFileToSend(
+                    url: item.fileURL, logicalIndex: idx, logicalTotal: logicalTotal,
+                    kind: .livePhotoStill, suggestedName: item.fileName
+                ))
+                files.append(MediaFileToSend(
+                    url: lpVideoURL, logicalIndex: idx, logicalTotal: logicalTotal,
+                    kind: .livePhotoVideo, suggestedName: nil
+                ))
+            } else {
+                files.append(MediaFileToSend(
+                    url: item.fileURL, logicalIndex: idx, logicalTotal: logicalTotal,
+                    kind: .regular, suggestedName: item.fileName
+                ))
+            }
+        }
+
+        // OutgoingMediaTransfer counts actual files (including LP companions).
+        outgoingTransfer = OutgoingMediaTransfer(totalItems: files.count, peerCount: peers.count)
 
         for peer in peers {
-            session.sendMedia(fileURLs: fileURLs, to: peer) { [weak self] in
+            session.sendMedia(files, to: peer) { [weak self] in
                 self?.outgoingTransfer?.recordCompletion()
                 if self?.outgoingTransfer?.isComplete == true {
                     Task { @MainActor [weak self] in

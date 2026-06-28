@@ -85,18 +85,17 @@ final class MultipeerNearbyService: NSObject, NearbySessionService {
         try? session.send(data, toPeers: [peerID], with: .reliable)
     }
 
-    func sendMedia(fileURLs: [URL], to peer: Peer, onItemSent: @escaping @MainActor () -> Void) {
+    func sendMedia(_ files: [MediaFileToSend], to peer: Peer, onItemSent: @escaping @MainActor () -> Void) {
         guard let session, let peerID = registry.mcPeerID(for: peer.id) else { return }
-        // Hyphens removed from UUID so "_" splitting in MediaTransferResource is unambiguous.
+        // One transferID per batch — hyphens stripped so "_" stays an unambiguous delimiter.
         let transferID = UUID().uuidString.replacingOccurrences(of: "-", with: "")
-        for (index, url) in fileURLs.enumerated() {
-            let resource = MediaTransferResource(
-                transferID: transferID, index: index,
-                total: fileURLs.count, fileExtension: url.pathExtension
-            )
-            session.sendResource(at: url, withName: resource.name, toPeer: peerID) { @Sendable error in
+        for file in files {
+            let resource = MediaTransferResource(transferID: transferID, from: file)
+            session.sendResource(at: file.url, withName: resource.name, toPeer: peerID) { @Sendable error in
                 if let error {
-                    MultipeerNearbyService.log.error("sendMedia error item \(index): \(error.localizedDescription, privacy: .public)")
+                    MultipeerNearbyService.log.error(
+                        "sendMedia error idx=\(file.logicalIndex) kind=\(file.kind.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)"
+                    )
                 }
                 Task { @MainActor in onItemSent() }
             }
@@ -148,7 +147,12 @@ extension MultipeerNearbyService: MCSessionDelegate {
     nonisolated func session(_ session: MCSession, didReceive stream: InputStream, withName streamName: String, fromPeer peerID: MCPeerID) {}
 
     nonisolated func session(_ session: MCSession, didStartReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, with progress: Progress) {
-        guard let resource = MediaTransferResource(parsing: resourceName), resource.index == 0 else { return }
+        // Fire the "started" event only on the first non-companion resource (index 0
+        // of a regular file or LP still). LP companion videos share the same logical
+        // index as their still; we don't re-fire for them.
+        guard let resource = MediaTransferResource(parsing: resourceName),
+              resource.index == 0,
+              resource.kind != .livePhotoVideo else { return }
         let peer = registry.peer(for: peerID)
         Task { @MainActor [weak self] in
             self?.delegate?.didStartReceivingMedia(
@@ -160,16 +164,21 @@ extension MultipeerNearbyService: MCSessionDelegate {
     nonisolated func session(_ session: MCSession, didFinishReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, at localURL: URL?, withError error: Error?) {
         guard let resource = MediaTransferResource(parsing: resourceName),
               let localURL, error == nil else { return }
-        // Copy to a stable temp path with the original extension — MPC's localURL
-        // has no extension and is only valid during this callback.
+        // Include kind tag in the filename so IncomingMediaTransfer can distinguish
+        // LP stills from their companion videos without re-parsing the resource name.
+        let kindTag = resource.kind == .livePhotoVideo ? "_lpv" : ""
         let destURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("mpc_recv_\(resource.transferID)_\(resource.index).\(resource.fileExtension)")
+            .appendingPathComponent(
+                "mpc_recv_\(resource.transferID)_\(resource.index)\(kindTag).\(resource.fileExtension)"
+            )
         try? FileManager.default.copyItem(at: localURL, to: destURL)
         let peer = registry.peer(for: peerID)
+        let kind = resource.kind
+        let fileName = resource.fileName
         Task { @MainActor [weak self] in
             self?.delegate?.didReceiveMediaItem(
                 transferID: resource.transferID, index: resource.index, totalCount: resource.total,
-                at: destURL, from: peer
+                at: destURL, kind: kind, fileName: fileName, from: peer
             )
         }
     }

@@ -9,12 +9,20 @@ protocol NearbySessionServiceDelegate: AnyObject {
     func didReceiveInvitation(from peer: Peer)
     func didReceive(message: TransferMessage)
     func didStartReceivingMedia(transferID: String, totalCount: Int, from peer: Peer)
-    func didReceiveMediaItem(transferID: String, index: Int, totalCount: Int, at url: URL, from peer: Peer)
+    func didReceiveMediaItem(
+        transferID: String, index: Int, totalCount: Int,
+        at url: URL, kind: MediaFileKind, fileName: String?,
+        from peer: Peer
+    )
 }
 
 extension NearbySessionServiceDelegate {
     func didStartReceivingMedia(transferID: String, totalCount: Int, from peer: Peer) {}
-    func didReceiveMediaItem(transferID: String, index: Int, totalCount: Int, at url: URL, from peer: Peer) {}
+    func didReceiveMediaItem(
+        transferID: String, index: Int, totalCount: Int,
+        at url: URL, kind: MediaFileKind, fileName: String?,
+        from peer: Peer
+    ) {}
 }
 
 @MainActor
@@ -23,17 +31,14 @@ protocol NearbySessionService: AnyObject {
     func start(displayName: String, deviceID: UUID)
     func stop()
     func connect(to peer: Peer)
-    /// Disconnect from `peer`. Concrete implementations should sever the MPC
-    /// session so the remote side also receives a disconnect callback.
     func disconnect(from peer: Peer)
     func send(text: String, to peer: Peer)
-    func sendMedia(fileURLs: [URL], to peer: Peer, onItemSent: @escaping @MainActor () -> Void)
+    func sendMedia(_ files: [MediaFileToSend], to peer: Peer, onItemSent: @escaping @MainActor () -> Void)
     func acceptInvitation()
     func declineInvitation()
 }
 
-// Default no-ops so legacy/preview conformers don't need to change.
 extension NearbySessionService {
     func disconnect(from peer: Peer) {}
-    func sendMedia(fileURLs: [URL], to peer: Peer, onItemSent: @escaping @MainActor () -> Void) {}
+    func sendMedia(_ files: [MediaFileToSend], to peer: Peer, onItemSent: @escaping @MainActor () -> Void) {}
 }

@@ -126,13 +126,16 @@ struct ReceivedMediaAlert: View {
                 .overlay {
                     if item.isVideo { videoOverlay.clipShape(RoundedRectangle(cornerRadius: 12)) }
                 }
+                .overlay(alignment: .topLeading) {
+                    if item.isLivePhoto { livePhotoBadge.padding(8) }
+                }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 16)
         } else {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(items) { item in
-                        ZStack {
+                        ZStack(alignment: .topLeading) {
                             MediaThumbnailView(item: item, gate: thumbnailGate)
                                 .scaledToFill()
                                 .frame(width: 160, height: 160)
@@ -144,6 +147,7 @@ struct ReceivedMediaAlert: View {
                                     .cornerRadius(12)
                                     .allowsHitTesting(false)
                             }
+                            if item.isLivePhoto { livePhotoBadge.padding(6) }
                         }
                     }
                 }
@@ -151,6 +155,14 @@ struct ReceivedMediaAlert: View {
                 .padding(.vertical, 12)
             }
         }
+    }
+
+    private var livePhotoBadge: some View {
+        Image(systemName: "livephoto")
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(.white)
+            .padding(5)
+            .background(.ultraThinMaterial, in: Circle())
     }
 
     private var videoOverlay: some View {

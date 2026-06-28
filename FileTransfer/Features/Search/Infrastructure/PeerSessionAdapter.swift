@@ -13,7 +13,11 @@ protocol PeerSessionEvents: AnyObject {
     func invitationReceived(from peer: Peer)
     func messageReceived(_ message: TransferMessage)
     func mediaTransferStarted(transferID: String, totalCount: Int, from peer: Peer)
-    func mediaItemReceived(transferID: String, index: Int, totalCount: Int, at url: URL, from peer: Peer)
+    func mediaItemReceived(
+        transferID: String, index: Int, totalCount: Int,
+        at url: URL, kind: MediaFileKind, fileName: String?,
+        from peer: Peer
+    )
 }
 
 // MARK: - PeerSessionAdapter
@@ -34,7 +38,14 @@ final class PeerSessionAdapter: NearbySessionServiceDelegate {
         events?.mediaTransferStarted(transferID: transferID, totalCount: totalCount, from: peer)
     }
 
-    func didReceiveMediaItem(transferID: String, index: Int, totalCount: Int, at url: URL, from peer: Peer) {
-        events?.mediaItemReceived(transferID: transferID, index: index, totalCount: totalCount, at: url, from: peer)
+    func didReceiveMediaItem(
+        transferID: String, index: Int, totalCount: Int,
+        at url: URL, kind: MediaFileKind, fileName: String?,
+        from peer: Peer
+    ) {
+        events?.mediaItemReceived(
+            transferID: transferID, index: index, totalCount: totalCount,
+            at: url, kind: kind, fileName: fileName, from: peer
+        )
     }
 }
