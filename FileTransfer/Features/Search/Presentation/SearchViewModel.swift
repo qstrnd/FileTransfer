@@ -37,6 +37,7 @@ final class SearchViewModel {
     private let historyStore: TransferHistoryStore
     private let onBack: () -> Void
     let mediaSaveService = MediaSaveService()
+    private let sessionAdapter = PeerSessionAdapter()
 
     init(
         emoji: String,
@@ -55,13 +56,14 @@ final class SearchViewModel {
         self.historyStore = historyStore
         self.onBack = onBack
         self.transferHistory = historyStore.records
+        sessionAdapter.events = self
     }
 
     // MARK: - Lifecycle
 
     func start() {
         log.info("start — emoji=\(self.emoji, privacy: .public) deviceID=\(self.deviceID, privacy: .public)")
-        service.delegate = self
+        service.delegate = sessionAdapter
         service.start(displayName: "\(emoji) \(name)", deviceID: deviceID)
     }
 
@@ -204,16 +206,16 @@ final class SearchViewModel {
     }
 }
 
-// MARK: - NearbySessionServiceDelegate
+// MARK: - PeerSessionEvents
 
-extension SearchViewModel: NearbySessionServiceDelegate {
-    func didDiscover(peer: Peer) {
+extension SearchViewModel: PeerSessionEvents {
+    func peerDiscovered(_ peer: Peer) {
         log.info("didDiscover — \(peer.displayName, privacy: .public) deviceID=\(peer.deviceID?.uuidString ?? "nil", privacy: .public)")
         guard !discoveredPeers.contains(peer) else { return }
         withAnimation(.spring(duration: 0.35)) { discoveredPeers.append(peer) }
     }
 
-    func didLose(peer: Peer) {
+    func peerLost(_ peer: Peer) {
         log.info("didLose — \(peer.displayName, privacy: .public)")
         withAnimation(.spring(duration: 0.35)) {
             discoveredPeers.removeAll { $0 == peer }
@@ -221,7 +223,7 @@ extension SearchViewModel: NearbySessionServiceDelegate {
         }
     }
 
-    func didConnect(peer: Peer) {
+    func peerConnected(_ peer: Peer) {
         let preState = peerStates[peer]
         log.info("didConnect — \(peer.displayName, privacy: .public) currentState=\(String(describing: preState), privacy: .public)")
 
@@ -246,7 +248,7 @@ extension SearchViewModel: NearbySessionServiceDelegate {
         log.debug("didConnect — state → \(String(describing: next), privacy: .public); history updated")
     }
 
-    func didDisconnect(peer: Peer) {
+    func peerDisconnected(_ peer: Peer) {
         let current = peerStates[peer] ?? .idle
         let event: ConnectionEvent = (current == .connecting) ? .connectionDeclined : .peerDisconnected
         log.info("didDisconnect — \(peer.displayName, privacy: .public) currentState=\(String(describing: current), privacy: .public) event=\(String(describing: event), privacy: .public)")
@@ -280,7 +282,7 @@ extension SearchViewModel: NearbySessionServiceDelegate {
         }
     }
 
-    func didReceiveInvitation(from peer: Peer) {
+    func invitationReceived(from peer: Peer) {
         log.info("didReceiveInvitation — from \(peer.displayName, privacy: .public)")
         pendingInvitationFrom = peer
 
@@ -299,7 +301,7 @@ extension SearchViewModel: NearbySessionServiceDelegate {
         }
     }
 
-    func didReceive(message: TransferMessage) {
+    func messageReceived(_ message: TransferMessage) {
         log.debug("didReceive — from \(message.senderName, privacy: .public): \(message.text, privacy: .private)")
         receivedMessage = message
         let (emoji, name) = Peer.parseDisplayName(message.senderName)
@@ -312,14 +314,14 @@ extension SearchViewModel: NearbySessionServiceDelegate {
         ))
     }
 
-    func didStartReceivingMedia(transferID: String, totalCount: Int, from peer: Peer) {
+    func mediaTransferStarted(transferID: String, totalCount: Int, from peer: Peer) {
         guard receivingMediaTransfer?.id != transferID else { return }
         receivingMediaTransfer = IncomingMediaTransfer(
             id: transferID, senderName: peer.displayName, totalCount: totalCount
         )
     }
 
-    func didReceiveMediaItem(transferID: String, index: Int, totalCount: Int, at url: URL, from peer: Peer) {
+    func mediaItemReceived(transferID: String, index: Int, totalCount: Int, at url: URL, from peer: Peer) {
         if receivingMediaTransfer == nil || receivingMediaTransfer?.id != transferID {
             receivingMediaTransfer = IncomingMediaTransfer(
                 id: transferID, senderName: peer.displayName, totalCount: totalCount
