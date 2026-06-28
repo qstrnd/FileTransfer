@@ -1,10 +1,12 @@
 import SwiftUI
-import Photos
 import UIKit
 
 struct ReceivedMediaAlert: View {
     let transfer: ReceivedMediaTransfer?
     let onDismiss: () -> Void
+    let onSaveToGallery: ([ReceivedMediaItem]) async -> Bool
+    let onSaveToFiles: ([ReceivedMediaItem]) -> Void
+    let onShare: ([ReceivedMediaItem]) -> Void
 
     @State private var showSavedToast = false
 
@@ -74,7 +76,8 @@ struct ReceivedMediaAlert: View {
                 Divider()
 
                 Button {
-                    saveToFiles(transfer.items)
+                    onSaveToFiles(transfer.items)
+                    onDismiss()
                 } label: {
                     Text("Save to Files")
                         .font(.body.weight(.semibold))
@@ -85,7 +88,8 @@ struct ReceivedMediaAlert: View {
                 Divider()
 
                 Button {
-                    shareItems(transfer.items)
+                    onShare(transfer.items)
+                    onDismiss()
                 } label: {
                     Text("Share…")
                         .font(.body.weight(.semibold))
@@ -175,76 +179,15 @@ struct ReceivedMediaAlert: View {
         .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
     }
 
-    // MARK: - Actions
+    // MARK: - Private
 
     private func saveToGallery(_ items: [ReceivedMediaItem]) {
-        // Extract only Sendable values before crossing concurrency boundaries.
-        let fileInfos: [(url: URL, isVideo: Bool)] = items.map { ($0.fileURL, $0.isVideo) }
         Task { @MainActor in
-            // Async API — no callback closure that could inherit @MainActor isolation.
-            let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
-            guard status == .authorized || status == .limited else {
-                onDismiss()
-                return
-            }
-            
-            let saved = await withCheckedContinuation { continuation in
-                DispatchQueue.global(qos: .userInitiated).async {
-                    // Crash on Xcode 26.4.1, iOS 26.4 if the async variance is used
-                    PHPhotoLibrary.shared().performChanges {
-                        for (url, isVideo) in fileInfos {
-                            if isVideo {
-                                let _ = PHAssetCreationRequest.creationRequestForAssetFromVideo(atFileURL: url)
-                            } else {
-                                let _ = PHAssetCreationRequest.creationRequestForAssetFromImage(atFileURL: url)
-                            }
-                        }
-                    } completionHandler: { success, _ in
-                        continuation.resume(returning: success)
-                    }
-                }
-            }
+            let saved = await onSaveToGallery(items)
             if saved { showSavedToast = true }
             try? await Task.sleep(for: .seconds(saved ? 1.5 : 0))
             showSavedToast = false
             onDismiss()
         }
-    }
-
-    private func saveToFiles(_ items: [ReceivedMediaItem]) {
-        let urls = items.map(\.fileURL)
-        guard !urls.isEmpty, let presenter = topViewController() else { return }
-        let docPicker = UIDocumentPickerViewController(forExporting: urls, asCopy: true)
-        presenter.present(docPicker, animated: true)
-        onDismiss()
-    }
-
-    private func shareItems(_ items: [ReceivedMediaItem]) {
-        guard !items.isEmpty, let presenter = topViewController() else { return }
-        // Share images as UIImage (so the sheet offers "Save Image", AirDrop as photo, etc.)
-        // and videos as file URLs.
-        let activityItems: [Any] = items.map { item in
-            if item.isVideo {
-                return item.fileURL as Any
-            } else {
-                return (UIImage(contentsOfFile: item.fileURL.path(percentEncoded: false)) ?? UIImage()) as Any
-            }
-        }
-        let activityVC = UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
-        if let popover = activityVC.popoverPresentationController {
-            popover.sourceView = presenter.view
-            popover.sourceRect = CGRect(x: presenter.view.bounds.midX, y: presenter.view.bounds.midY, width: 0, height: 0)
-            popover.permittedArrowDirections = []
-        }
-        presenter.present(activityVC, animated: true)
-        onDismiss()
-    }
-
-    private func topViewController() -> UIViewController? {
-        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-              let rootVC = windowScene.windows.first?.rootViewController else { return nil }
-        var presenter = rootVC
-        while let presented = presenter.presentedViewController { presenter = presented }
-        return presenter
     }
 }

@@ -36,6 +36,7 @@ final class SearchViewModel {
     private let connectionHistory: any ConnectionHistoryStore
     private let historyStore: TransferHistoryStore
     private let onBack: () -> Void
+    let mediaSaveService = MediaSaveService()
 
     init(
         emoji: String,
