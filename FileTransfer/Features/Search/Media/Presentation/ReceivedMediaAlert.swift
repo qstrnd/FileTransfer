@@ -208,7 +208,10 @@ private struct MediaThumbnailView: View {
             }
         }
         .task(id: item.id) {
-            image = await gate.thumbnail(for: item.fileURL, isVideo: item.isVideo)
+            // Data → UIImage conversion happens here at the Presentation boundary.
+            if let data = await gate.thumbnail(for: item.fileURL, isVideo: item.isVideo) {
+                image = UIImage(data: data)
+            }
         }
     }
 }

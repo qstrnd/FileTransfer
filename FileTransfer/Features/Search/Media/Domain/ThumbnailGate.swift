@@ -1,9 +1,8 @@
-import UIKit
+import Foundation
 
-/// Port for loading a displayable thumbnail from a local media file.
-///
-/// UIImage is considered a platform primitive for iOS-only modules and
-/// is therefore acceptable in gate signatures. See AGENTS.md §Gates.
+/// Port for loading thumbnail image data from a local media file.
+/// Returns raw Data so Domain stays free of UIKit. Presentation converts
+/// Data → UIImage at the boundary.
 protocol ThumbnailGate: Sendable {
-    func thumbnail(for url: URL, isVideo: Bool) async -> UIImage
+    func thumbnail(for url: URL, isVideo: Bool) async -> Data?
 }

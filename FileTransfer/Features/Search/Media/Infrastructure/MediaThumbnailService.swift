@@ -1,24 +1,26 @@
 import AVFoundation
 import UIKit
 
-/// Concrete ThumbnailGate: generates displayable thumbnails from local media files.
+/// Concrete ThumbnailGate: renders a scaled thumbnail and returns it as JPEG Data.
+/// UIImage stays inside Infrastructure; the gate boundary only exposes Data.
 final class MediaThumbnailService: ThumbnailGate {
 
-    func thumbnail(for url: URL, isVideo: Bool) async -> UIImage {
+    func thumbnail(for url: URL, isVideo: Bool) async -> Data? {
+        let image: UIImage
         if isVideo {
-            return await videoThumbnail(at: url)
+            image = await videoThumbnail(at: url)
         } else {
-            return imageThumbnail(at: url)
+            image = imageThumbnail(at: url)
         }
+        return scaled(image, maxSize: 300).jpegData(compressionQuality: 0.8)
     }
 
     // MARK: - Private
 
     private func imageThumbnail(at url: URL) -> UIImage {
-        let image = UIImage(contentsOfFile: url.path(percentEncoded: false))
+        UIImage(contentsOfFile: url.path(percentEncoded: false))
             ?? UIImage(systemName: "photo.fill")
             ?? UIImage()
-        return makeThumbnail(from: image, maxSize: 300)
     }
 
     private func videoThumbnail(at url: URL) async -> UIImage {
@@ -32,7 +34,7 @@ final class MediaThumbnailService: ThumbnailGate {
     }
 
     // nonisolated: UIGraphicsImageRenderer is thread-safe since iOS 10.
-    nonisolated private func makeThumbnail(from image: UIImage, maxSize: CGFloat) -> UIImage {
+    nonisolated private func scaled(_ image: UIImage, maxSize: CGFloat) -> UIImage {
         let size = image.size
         guard size.width > 0, size.height > 0 else { return image }
         let scale = min(maxSize / size.width, maxSize / size.height)
