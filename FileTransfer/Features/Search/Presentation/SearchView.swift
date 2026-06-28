@@ -57,23 +57,43 @@ struct SearchView: View {
             .ignoresSafeArea()
         }
         .background(PinnedToast(peer: viewModel.disconnectedPeer))
-        .background(PinnedInvitationAlert(
-            peer: viewModel.pendingInvitationFrom,
-            onAccept: { viewModel.acceptInvitation() },
-            onDecline: { viewModel.declineInvitation() }
+        .background(PinnedWindow(
+            content: InvitationAlert(
+                peer: viewModel.pendingInvitationFrom,
+                onAccept: { viewModel.acceptInvitation() },
+                onDecline: { viewModel.declineInvitation() }
+            ),
+            isVisible: viewModel.pendingInvitationFrom != nil,
+            isInteractive: true,
+            hideDelay: 0.45
         ))
-        .background(PinnedAlert(
-            message: viewModel.receivedMessage,
-            onDismiss: { viewModel.receivedMessage = nil }
+        .background(PinnedWindow(
+            content: ReceivedTextAlert(
+                message: viewModel.receivedMessage,
+                onDismiss: { viewModel.receivedMessage = nil }
+            ),
+            isVisible: viewModel.receivedMessage != nil,
+            isInteractive: true,
+            hideDelay: 0.2
         ))
         .background(PinnedReceivingToast(transfer: viewModel.receivingMediaTransfer))
-        .background(PinnedMediaAlert(
-            transfer: viewModel.receivedMedia,
-            onDismiss: { viewModel.receivedMedia = nil }
+        .background(PinnedWindow(
+            content: ReceivedMediaAlert(
+                transfer: viewModel.receivedMedia,
+                onDismiss: { viewModel.receivedMedia = nil }
+            ),
+            isVisible: viewModel.receivedMedia != nil,
+            isInteractive: true,
+            hideDelay: 0.2
         ))
-        .background(PinnedSendingAlert(
-            transfer: viewModel.outgoingMediaTransfer,
-            onAbort: { viewModel.abortMediaTransfer() }
+        .background(PinnedWindow(
+            content: SendingMediaAlert(
+                transfer: viewModel.outgoingMediaTransfer,
+                onAbort: { viewModel.abortMediaTransfer() }
+            ),
+            isVisible: viewModel.outgoingMediaTransfer != nil,
+            isInteractive: viewModel.outgoingMediaTransfer != nil,
+            hideDelay: 0.45
         ))
         .sheet(isPresented: $showTextShare) {
             TextShareView(
