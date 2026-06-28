@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="280" height="280" viewBox="0 0 280 280" role="img">
+  <title>FileTransfer — document</title>
+  <desc>Foreground glyph: a back glass pane and a front glass document sheet with a folded corner, edge highlight, and three content lines. Transparent background.</desc>
+  <defs>
+    <linearGradient id="ftGlass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.14"/>
+    </linearGradient>
+    <linearGradient id="ftGlassS" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.72"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.3"/>
+    </linearGradient>
+  </defs>
+  <rect x="64" y="52" width="108" height="150" rx="18" fill="url(#ftGlass)" stroke="#FFFFFF" stroke-opacity="0.32" stroke-width="1.5"/>
+  <path d="M95 84 Q95 70 109 70 L164 70 L204 110 L204 202 Q204 216 190 216 L109 216 Q95 216 95 202 Z" fill="url(#ftGlassS)" stroke="#FFFFFF" stroke-opacity="0.55" stroke-width="1.5"/>
+  <path d="M164 70 L164 110 L204 110 Z" fill="#FFFFFF" opacity="0.5"/>
+  <path d="M109 70 L164 70" stroke="#FFFFFF" stroke-opacity="0.85" stroke-width="2" stroke-linecap="round"/>
+  <rect x="114" y="120" width="62" height="9" rx="4.5" fill="#FFFFFF" opacity="0.55"/>
+  <rect x="114" y="140" width="62" height="9" rx="4.5" fill="#FFFFFF" opacity="0.5"/>
+  <rect x="114" y="160" width="42" height="9" rx="4.5" fill="#FFFFFF" opacity="0.45"/>
+</svg>

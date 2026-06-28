@@ -285,7 +285,7 @@
 		A1628F422FE9C5CC00A4A1D3 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = FileTransferIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = FileTransfer/FileTransfer.entitlements;
 				CODE_SIGN_STYLE = Automatic;
@@ -319,7 +319,7 @@
 		A1628F432FE9C5CC00A4A1D3 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = FileTransferIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = FileTransfer/FileTransfer.entitlements;
 				CODE_SIGN_STYLE = Automatic;
