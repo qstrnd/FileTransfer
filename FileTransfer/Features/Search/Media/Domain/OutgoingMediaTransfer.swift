@@ -5,6 +5,7 @@ struct OutgoingMediaTransfer: Identifiable {
     let totalItems: Int
     let peerCount: Int
     private(set) var completions: Int = 0
+    var progress: Double = 0
 
     var totalCompletions: Int { totalItems * peerCount }
     var isComplete: Bool { totalItems == 0 || completions >= totalCompletions }

@@ -12,6 +12,8 @@ final class SendMediaUseCase {
 
     private let session: any NearbySessionService
     private let history: any TransferHistoryGate
+    private var progressPollingTask: Task<Void, Never>?
+    private var activeProgresses: [Progress] = []
 
     init(session: any NearbySessionService, history: any TransferHistoryGate) {
         self.session = session
@@ -46,9 +48,11 @@ final class SendMediaUseCase {
 
         // OutgoingMediaTransfer counts actual files (including LP companions).
         outgoingTransfer = OutgoingMediaTransfer(totalItems: files.count, peerCount: peers.count)
+        activeProgresses = []
+        startProgressPolling()
 
         for peer in peers {
-            session.sendMedia(files, to: peer) { [weak self] in
+            let progresses = session.sendMedia(files, to: peer) { [weak self] in
                 self?.outgoingTransfer?.recordCompletion()
                 if self?.outgoingTransfer?.isComplete == true {
                     Task { @MainActor [weak self] in
@@ -57,6 +61,7 @@ final class SendMediaUseCase {
                     }
                 }
             }
+            activeProgresses.append(contentsOf: progresses)
             history.add(TransferRecord(
                 peerEmoji: peer.emojiComponent,
                 peerName: peer.nameComponent,
@@ -70,6 +75,29 @@ final class SendMediaUseCase {
     /// Clears the outgoing transfer state. The caller is responsible for
     /// disconnecting peers if the transfer was aborted mid-flight.
     func abort() {
+        progressPollingTask?.cancel()
+        progressPollingTask = nil
+        activeProgresses = []
         outgoingTransfer = nil
+    }
+
+    // MARK: - Private
+
+    private func startProgressPolling() {
+        progressPollingTask?.cancel()
+        progressPollingTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(50))
+                guard let self, outgoingTransfer != nil else { break }
+                let progresses = activeProgresses
+                guard !progresses.isEmpty else { continue }
+                let total = progresses.reduce(0.0) { $0 + Double($1.totalUnitCount) }
+                let completed = progresses.reduce(0.0) { $0 + Double($1.completedUnitCount) }
+                if total > 0 {
+                    outgoingTransfer?.progress = completed / total
+                }
+                if outgoingTransfer?.isComplete == true { break }
+            }
+        }
     }
 }

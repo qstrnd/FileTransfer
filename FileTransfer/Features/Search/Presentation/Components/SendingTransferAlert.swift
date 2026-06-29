@@ -9,23 +9,28 @@ struct SendingTransferStatus: Identifiable {
     let totalItems: Int
     let peerCount: Int
     let isComplete: Bool
+    /// Byte-level progress 0–1. For contact transfers this is binary (0 or 1).
+    let progress: Double
 }
 
 extension OutgoingMediaTransfer {
     var sendingStatus: SendingTransferStatus {
-        SendingTransferStatus(id: id, totalItems: totalItems, peerCount: peerCount, isComplete: isComplete)
+        SendingTransferStatus(id: id, totalItems: totalItems, peerCount: peerCount,
+                              isComplete: isComplete, progress: progress)
     }
 }
 
 extension OutgoingContactTransfer {
     var sendingStatus: SendingTransferStatus {
-        SendingTransferStatus(id: id, totalItems: totalItems, peerCount: peerCount, isComplete: isComplete)
+        SendingTransferStatus(id: id, totalItems: totalItems, peerCount: peerCount,
+                              isComplete: isComplete, progress: isComplete ? 1 : 0)
     }
 }
 
 extension OutgoingFileTransfer {
     var sendingStatus: SendingTransferStatus {
-        SendingTransferStatus(id: id, totalItems: totalFiles, peerCount: peerCount, isComplete: isComplete)
+        SendingTransferStatus(id: id, totalItems: totalFiles, peerCount: peerCount,
+                              isComplete: isComplete, progress: progress)
     }
 }
 
@@ -55,14 +60,14 @@ struct SendingTransferAlert: View {
         VStack(spacing: 0) {
             ZStack {
                 VStack(spacing: 12) {
-                    ProgressView()
-                        .scaleEffect(1.4)
-                        .padding(.bottom, 4)
                     Text("Sending \(transfer.totalItems) item\(transfer.totalItems == 1 ? "" : "s")")
                         .font(.title3.weight(.semibold))
                     Text("to \(transfer.peerCount) device\(transfer.peerCount == 1 ? "" : "s")")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
+                    ProgressView(value: transfer.progress)
+                        .tint(.blue)
+                        .padding(.top, 4)
                 }
                 .frame(maxWidth: .infinity)
                 .opacity(transfer.isComplete ? 0 : 1)

@@ -5,6 +5,7 @@ struct OutgoingFileTransfer: Identifiable {
     let totalFiles: Int
     let peerCount: Int
     private(set) var completions: Int = 0
+    var progress: Double = 0
 
     var totalCompletions: Int { totalFiles * peerCount }
     var isComplete: Bool { totalFiles == 0 || completions >= totalCompletions }

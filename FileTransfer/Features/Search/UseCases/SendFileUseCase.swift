@@ -9,6 +9,8 @@ final class SendFileUseCase {
 
     private let session: any NearbySessionService
     private let history: any TransferHistoryGate
+    private var progressPollingTask: Task<Void, Never>?
+    private var activeProgresses: [Progress] = []
 
     init(session: any NearbySessionService, history: any TransferHistoryGate) {
         self.session = session
@@ -22,9 +24,11 @@ final class SendFileUseCase {
             FileToSend(url: url, name: url.lastPathComponent, index: idx, total: total)
         }
         outgoingTransfer = OutgoingFileTransfer(totalFiles: total, peerCount: peers.count)
+        activeProgresses = []
+        startProgressPolling()
 
         for peer in peers {
-            session.sendFiles(files, to: peer) { [weak self] in
+            let progresses = session.sendFiles(files, to: peer) { [weak self] in
                 self?.outgoingTransfer?.recordCompletion()
                 if self?.outgoingTransfer?.isComplete == true {
                     Task { @MainActor [weak self] in
@@ -33,6 +37,7 @@ final class SendFileUseCase {
                     }
                 }
             }
+            activeProgresses.append(contentsOf: progresses)
             let detail = total == 1 ? urls[0].lastPathComponent : "\(total) files"
             history.add(TransferRecord(
                 peerEmoji: peer.emojiComponent,
@@ -45,6 +50,29 @@ final class SendFileUseCase {
     }
 
     func abort() {
+        progressPollingTask?.cancel()
+        progressPollingTask = nil
+        activeProgresses = []
         outgoingTransfer = nil
+    }
+
+    // MARK: - Private
+
+    private func startProgressPolling() {
+        progressPollingTask?.cancel()
+        progressPollingTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(50))
+                guard let self, outgoingTransfer != nil else { break }
+                let progresses = activeProgresses
+                guard !progresses.isEmpty else { continue }
+                let total = progresses.reduce(0.0) { $0 + Double($1.totalUnitCount) }
+                let completed = progresses.reduce(0.0) { $0 + Double($1.completedUnitCount) }
+                if total > 0 {
+                    outgoingTransfer?.progress = completed / total
+                }
+                if outgoingTransfer?.isComplete == true { break }
+            }
+        }
     }
 }

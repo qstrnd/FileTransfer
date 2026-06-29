@@ -55,8 +55,10 @@ protocol NearbySessionService: AnyObject {
     func connect(to peer: Peer, isReconnect: Bool)
     func disconnect(from peer: Peer)
     func send(text: String, to peer: Peer)
-    func sendMedia(_ files: [MediaFileToSend], to peer: Peer, onItemSent: @escaping @MainActor () -> Void)
-    func sendFiles(_ files: [FileToSend], to peer: Peer, onItemSent: @escaping @MainActor () -> Void)
+    @discardableResult
+    func sendMedia(_ files: [MediaFileToSend], to peer: Peer, onItemSent: @escaping @MainActor () -> Void) -> [Progress]
+    @discardableResult
+    func sendFiles(_ files: [FileToSend], to peer: Peer, onItemSent: @escaping @MainActor () -> Void) -> [Progress]
     func sendContact(data: Data, to peer: Peer)
     func sendPing(to peer: Peer)
     func sendPong(to peer: Peer)
@@ -67,8 +69,8 @@ protocol NearbySessionService: AnyObject {
 extension NearbySessionService {
     func connect(to peer: Peer) { connect(to: peer, isReconnect: false) }
     func disconnect(from peer: Peer) {}
-    func sendMedia(_ files: [MediaFileToSend], to peer: Peer, onItemSent: @escaping @MainActor () -> Void) {}
-    func sendFiles(_ files: [FileToSend], to peer: Peer, onItemSent: @escaping @MainActor () -> Void) {}
+    func sendMedia(_ files: [MediaFileToSend], to peer: Peer, onItemSent: @escaping @MainActor () -> Void) -> [Progress] { [] }
+    func sendFiles(_ files: [FileToSend], to peer: Peer, onItemSent: @escaping @MainActor () -> Void) -> [Progress] { [] }
     func sendContact(data: Data, to peer: Peer) {}
     func sendPing(to peer: Peer) {}
     func sendPong(to peer: Peer) {}
