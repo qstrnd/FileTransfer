@@ -78,6 +78,9 @@ final class SearchViewModel {
     /// Peers for which peerLost fired while they were connecting/connected.
     /// Eviction from discoveredPeers is deferred until peerDisconnected fires.
     private var pendingLostPeers: Set<Peer.ID> = []
+    /// Peers the user explicitly disconnected from this session.
+    /// Auto-reconnect is suppressed for these peers until handleForeground resets the session.
+    private var manuallyDisconnectedPeers: Set<Peer.ID> = []
 
     init(
         emoji: String,
@@ -159,6 +162,7 @@ final class SearchViewModel {
         recentlyLaunchedPeers = []
         lastPongReceived = [:]
         pendingLostPeers = []
+        manuallyDisconnectedPeers = []
         // Clear state BEFORE stopping so that any async delegate callbacks
         // triggered by session.disconnect() land on an already-clean map
         // and cannot re-set peers to .connected.
@@ -185,6 +189,7 @@ final class SearchViewModel {
     }
 
     private func initiateConnect(to peer: Peer, isReconnect: Bool) {
+        if !isReconnect { manuallyDisconnectedPeers.remove(peer.id) }
         let current = peerStates[peer] ?? .idle
         log.info("connect — peer=\(peer.displayName, privacy: .public) isReconnect=\(isReconnect) currentState=\(String(describing: current), privacy: .public)")
         guard ConnectionPolicy.canInitiate(from: current),
@@ -325,6 +330,7 @@ final class SearchViewModel {
             log.warning("disconnect — invalid from state \(String(describing: current), privacy: .public)")
             return
         }
+        manuallyDisconnectedPeers.insert(peer.id)
         withAnimation(.spring(duration: 0.4)) { peerStates[peer] = next }
         log.debug("disconnect — state \(String(describing: current), privacy: .public) → \(String(describing: next), privacy: .public)")
         service.disconnect(from: peer)
@@ -368,7 +374,8 @@ extension SearchViewModel: PeerSessionEvents {
     private func maybeAutoReconnect(to peer: Peer) {
         guard let peerDeviceID = peer.deviceID,
               connectionHistory.hasConnected(to: peerDeviceID),
-              (peerStates[peer] ?? .idle) == .idle else { return }
+              (peerStates[peer] ?? .idle) == .idle,
+              !manuallyDisconnectedPeers.contains(peer.id) else { return }
         // When returning from background we always initiate so that the toast
         // ("Connections are restored") appears on the correct device. For cold
         // launch the UUID tiebreaker prevents both sides from sending simultaneous

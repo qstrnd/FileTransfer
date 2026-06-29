@@ -52,6 +52,45 @@ struct SearchViewModelTests {
         Peer(displayName: name, deviceID: UUID())
     }
 
+    // MARK: - Auto-reconnect
+
+    @Test func manualDisconnect_suppressesAutoReconnect() async throws {
+        // After a manual disconnect, a peer re-appearing in the same session must NOT
+        // be auto-reconnected, even when all other conditions (known peer history,
+        // isReturningFromBackground) would normally cause reconnect to fire.
+        let history = InMemoryConnectionHistoryStore()
+        let peerID = UUID()
+        history.record(ConnectionRecord(deviceID: peerID, displayName: "🐟 Fish", lastConnected: .now))
+        let (vm, service) = makeVM(history: history)
+        let p = Peer(displayName: "🐟 Fish", deviceID: peerID)
+
+        // handleForeground sets isReturningFromBackground = true so that — without
+        // the suppression fix — auto-reconnect would fire on the next peerDiscovered.
+        vm.handleForeground()
+
+        // Simulate a successful connection without calling peerDiscovered, which
+        // would create a dangling reconnect Task that could corrupt the assertion.
+        vm.peerStates[p] = .connecting
+        vm.peerConnected(p)
+
+        // User manually disconnects — the event under test.
+        vm.disconnect(from: p)
+        vm.peerDisconnected(p)
+
+        let connectsBefore = service.connectCalls.count
+
+        // Peer leaves and re-appears within the same session.
+        vm.peerLost(p)
+        vm.peerDiscovered(p)
+
+        // Allow the 500 ms reconnect window to elapse; if a Task were created
+        // it would have called connect by now.
+        try await Task.sleep(for: .milliseconds(700))
+
+        #expect(service.connectCalls.count == connectsBefore,
+                "no new connect expected after manual disconnect")
+    }
+
     // MARK: - peerDiscovered
 
     @Test func peerDiscovered_selfDeviceID_isIgnored() {
