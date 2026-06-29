@@ -30,6 +30,7 @@ final class TransferItem {
         case .photo:    self.typeRaw = "photo"
         case .document: self.typeRaw = "document"
         case .contact:  self.typeRaw = "contact"
+        case .file:     self.typeRaw = "file"
         }
         self.detail = record.detail
     }
@@ -41,6 +42,7 @@ final class TransferItem {
             case "photo":    .photo
             case "document": .document
             case "contact":  .contact
+            case "file":     .file
             default:         .text
         }
         return TransferRecord(

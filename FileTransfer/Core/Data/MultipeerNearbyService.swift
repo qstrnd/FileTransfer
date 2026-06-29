@@ -129,6 +129,24 @@ final class MultipeerNearbyService: NSObject, NearbySessionService {
         }
     }
 
+    func sendFiles(_ files: [FileToSend], to peer: Peer, onItemSent: @escaping @MainActor () -> Void) {
+        guard let session, let peerID = registry.mcPeerID(for: peer.id) else { return }
+        let transferID = UUID().uuidString.replacingOccurrences(of: "-", with: "")
+        for file in files {
+            let resource = FileTransferResource(
+                transferID: transferID, index: file.index, total: file.total, fileName: file.name
+            )
+            session.sendResource(at: file.url, withName: resource.name, toPeer: peerID) { @Sendable error in
+                if let error {
+                    MultipeerNearbyService.log.error(
+                        "sendFiles error idx=\(file.index): \(error.localizedDescription, privacy: .public)"
+                    )
+                }
+                Task { @MainActor in onItemSent() }
+            }
+        }
+    }
+
     func acceptInvitation() {
         MultipeerNearbyService.log.info("acceptInvitation")
         invitationHandler?(true, session)
@@ -183,39 +201,60 @@ extension MultipeerNearbyService: MCSessionDelegate {
     nonisolated func session(_ session: MCSession, didReceive stream: InputStream, withName streamName: String, fromPeer peerID: MCPeerID) {}
 
     nonisolated func session(_ session: MCSession, didStartReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, with progress: Progress) {
-        // Fire the "started" event only on the first non-companion resource (index 0
-        // of a regular file or LP still). LP companion videos share the same logical
-        // index as their still; we don't re-fire for them.
-        guard let resource = MediaTransferResource(parsing: resourceName),
-              resource.index == 0,
-              resource.kind != .livePhotoVideo else { return }
         let peer = registry.peer(for: peerID)
-        Task { @MainActor [weak self] in
-            self?.delegate?.didStartReceivingMedia(
-                transferID: resource.transferID, totalCount: resource.total, from: peer
-            )
+        if let resource = MediaTransferResource(parsing: resourceName),
+           resource.index == 0, resource.kind != .livePhotoVideo {
+            Task { @MainActor [weak self] in
+                self?.delegate?.didStartReceivingMedia(
+                    transferID: resource.transferID, totalCount: resource.total, from: peer
+                )
+            }
+            return
+        }
+        if let resource = FileTransferResource(parsing: resourceName), resource.index == 0 {
+            Task { @MainActor [weak self] in
+                self?.delegate?.didStartReceivingFile(
+                    transferID: resource.transferID, totalCount: resource.total, from: peer
+                )
+            }
         }
     }
 
     nonisolated func session(_ session: MCSession, didFinishReceivingResourceWithName resourceName: String, fromPeer peerID: MCPeerID, at localURL: URL?, withError error: Error?) {
-        guard let resource = MediaTransferResource(parsing: resourceName),
-              let localURL, error == nil else { return }
-        // Include kind tag in the filename so IncomingMediaTransfer can distinguish
-        // LP stills from their companion videos without re-parsing the resource name.
-        let kindTag = resource.kind == .livePhotoVideo ? "_lpv" : ""
-        let destURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(
-                "mpc_recv_\(resource.transferID)_\(resource.index)\(kindTag).\(resource.fileExtension)"
-            )
-        try? FileManager.default.copyItem(at: localURL, to: destURL)
+        guard let localURL, error == nil else { return }
         let peer = registry.peer(for: peerID)
-        let kind = resource.kind
-        let fileName = resource.fileName
-        Task { @MainActor [weak self] in
-            self?.delegate?.didReceiveMediaItem(
-                transferID: resource.transferID, index: resource.index, totalCount: resource.total,
-                at: destURL, kind: kind, fileName: fileName, from: peer
-            )
+
+        if let resource = MediaTransferResource(parsing: resourceName) {
+            // Include kind tag in the filename so IncomingMediaTransfer can distinguish
+            // LP stills from their companion videos without re-parsing the resource name.
+            let kindTag = resource.kind == .livePhotoVideo ? "_lpv" : ""
+            let destURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent(
+                    "mpc_recv_\(resource.transferID)_\(resource.index)\(kindTag).\(resource.fileExtension)"
+                )
+            try? FileManager.default.copyItem(at: localURL, to: destURL)
+            let kind = resource.kind
+            let fileName = resource.fileName
+            Task { @MainActor [weak self] in
+                self?.delegate?.didReceiveMediaItem(
+                    transferID: resource.transferID, index: resource.index, totalCount: resource.total,
+                    at: destURL, kind: kind, fileName: fileName, from: peer
+                )
+            }
+            return
+        }
+
+        if let resource = FileTransferResource(parsing: resourceName) {
+            let destURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("file_recv_\(UUID().uuidString)_\(resource.fileName)")
+            try? FileManager.default.copyItem(at: localURL, to: destURL)
+            let name = resource.fileName
+            Task { @MainActor [weak self] in
+                self?.delegate?.didReceiveFile(
+                    transferID: resource.transferID, index: resource.index, totalCount: resource.total,
+                    at: destURL, name: name, from: peer
+                )
+            }
         }
     }
 }

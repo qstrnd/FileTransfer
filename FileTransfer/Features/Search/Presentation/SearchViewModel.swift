@@ -28,6 +28,12 @@ final class SearchViewModel {
     var outgoingMediaTransfer: OutgoingMediaTransfer? { sendMediaUseCase.outgoingTransfer }
     /// Forwarded from SendContactUseCase — observed transitively through @Observable.
     var outgoingContactTransfer: OutgoingContactTransfer? { sendContactUseCase.outgoingTransfer }
+    /// Tracks an in-progress incoming file transfer; updated as files arrive.
+    var receivingFileTransfer: IncomingFileTransfer? = nil
+    /// Set when all files of a transfer arrive; cleared when user dismisses.
+    var receivedFiles: ReceivedFileTransfer? = nil
+    /// Forwarded from SendFileUseCase — observed transitively through @Observable.
+    var outgoingFileTransfer: OutgoingFileTransfer? { sendFileUseCase.outgoingTransfer }
     /// Set when a contact payload arrives; cleared when the user dismisses the alert.
     var receivedContact: ReceivedContactTransfer?
     /// Live transfer history — reads directly from the @Observable store.
@@ -52,6 +58,8 @@ final class SearchViewModel {
     private let sessionAdapter = PeerSessionAdapter()
     private let sendMediaUseCase: SendMediaUseCase
     private let sendContactUseCase: SendContactUseCase
+    private let sendFileUseCase: SendFileUseCase
+    let fileSaveService = FileSaveService()
 
     /// Tracks peers we invited with isReconnect=true so peerConnected can show the toast.
     private var reconnectingPeers: Set<Peer.ID> = []
@@ -93,6 +101,7 @@ final class SearchViewModel {
         self.onBack = onBack
         self.sendMediaUseCase = SendMediaUseCase(session: service, history: historyStore)
         self.sendContactUseCase = SendContactUseCase(session: service, history: historyStore)
+        self.sendFileUseCase = SendFileUseCase(session: service, history: historyStore)
         sessionAdapter.events = self
     }
 
@@ -236,6 +245,15 @@ final class SearchViewModel {
 
     func abortContactTransfer() {
         sendContactUseCase.abort()
+    }
+
+    func sendFiles(_ urls: [URL]) {
+        sendFileUseCase.send(urls, to: connectedPeers)
+    }
+
+    func abortFileTransfer() {
+        sendFileUseCase.abort()
+        disconnectAll()
     }
 
     func shareReceivedContact(vCardData: Data) {
@@ -607,6 +625,43 @@ extension SearchViewModel: PeerSessionEvents {
             try? await Task.sleep(for: .seconds(1.2))
             receivingMediaTransfer = nil
             receivedMedia = ReceivedMediaTransfer(senderName: senderName, items: items)
+        }
+    }
+
+    func fileTransferStarted(transferID: String, totalCount: Int, from peer: Peer) {
+        guard receivingFileTransfer?.id != transferID else { return }
+        receivingFileTransfer = IncomingFileTransfer(
+            id: transferID, senderName: peer.displayName, totalCount: totalCount
+        )
+    }
+
+    func fileItemReceived(
+        transferID: String, index: Int, totalCount: Int,
+        at url: URL, name: String,
+        from peer: Peer
+    ) {
+        if receivingFileTransfer == nil || receivingFileTransfer?.id != transferID {
+            receivingFileTransfer = IncomingFileTransfer(
+                id: transferID, senderName: peer.displayName, totalCount: totalCount
+            )
+        }
+        receivingFileTransfer?.add(ReceivedFile(url: url, name: name), at: index)
+
+        guard receivingFileTransfer?.isComplete == true,
+              let transfer = receivingFileTransfer else { return }
+
+        let senderName = transfer.senderName
+        let files = transfer.orderedFiles
+        let (emoji, peerName) = Peer.parseDisplayName(peer.displayName)
+        let detail = files.count == 1 ? files[0].name : "\(files.count) files"
+        addRecord(TransferRecord(
+            peerEmoji: emoji, peerName: peerName,
+            direction: .received, type: .file, detail: detail
+        ))
+        Task {
+            try? await Task.sleep(for: .seconds(1.2))
+            receivingFileTransfer = nil
+            receivedFiles = ReceivedFileTransfer(senderName: senderName, files: files)
         }
     }
 }

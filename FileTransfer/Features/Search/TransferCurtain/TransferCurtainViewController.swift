@@ -23,7 +23,7 @@ final class TransferCurtainViewController: UIViewController {
 
     var onShareText:      (() -> Void)?
     var onSharePhoto:     (() -> Void)?
-    var onShareDocument:  (() -> Void)?
+    var onShareFile:      (() -> Void)?
     var onShareContact:   (() -> Void)?
     var onClearSelection: (() -> Void)?
 
@@ -55,10 +55,10 @@ final class TransferCurtainViewController: UIViewController {
         normalBG: TransferType.photo.normalBG, pressedBG: TransferType.photo.pressedBG,
         iconTint: TransferType.photo.tintColor
     )
-    let documentButton = TransferActionButton(
-        icon: "doc", title: "Document",
-        normalBG: TransferType.document.normalBG, pressedBG: TransferType.document.pressedBG,
-        iconTint: TransferType.document.tintColor
+    let fileButton = TransferActionButton(
+        icon: "doc.fill", title: "File",
+        normalBG: TransferType.file.normalBG, pressedBG: TransferType.file.pressedBG,
+        iconTint: TransferType.file.tintColor
     )
     let contactButton = TransferActionButton(
         icon: "person", title: "Contact",
@@ -148,14 +148,14 @@ final class TransferCurtainViewController: UIViewController {
         }
         let enabled = selectedCount > 0
         clearButton.isHidden = !enabled
-        [textButton, photoButton, documentButton, contactButton].forEach { $0.isEnabled = enabled }
+        [textButton, photoButton, fileButton, contactButton].forEach { $0.isEnabled = enabled }
     }
 
     // MARK: - Button actions
 
-    @objc func clearTapped()    { onClearSelection?() }
-    @objc func textTapped()     { onShareText?() }
-    @objc func photoTapped()    { onSharePhoto?() }
-    @objc func documentTapped() { onShareDocument?() }
-    @objc func contactTapped()  { onShareContact?() }
+    @objc func clearTapped()  { onClearSelection?() }
+    @objc func textTapped()   { onShareText?() }
+    @objc func photoTapped()  { onSharePhoto?() }
+    @objc func fileTapped()   { onShareFile?() }
+    @objc func contactTapped(){ onShareContact?() }
 }

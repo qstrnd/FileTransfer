@@ -10,11 +10,10 @@ struct TransferCurtainView: UIViewControllerRepresentable {
     var viewModel: SearchViewModel
 
     // Called when the user taps a share action button.
-    // The actual file-picking and transfer implementation is wired up later.
-    var onShareText:     () -> Void
-    var onSharePhoto:    () -> Void
-    var onShareDocument: () -> Void
-    var onShareContact:  () -> Void
+    var onShareText:    () -> Void
+    var onSharePhoto:   () -> Void
+    var onShareFile:    () -> Void
+    var onShareContact: () -> Void
 
     func makeUIViewController(context: Context) -> TransferCurtainViewController {
         TransferCurtainViewController()
@@ -25,10 +24,10 @@ struct TransferCurtainView: UIViewControllerRepresentable {
         uiViewController.update(history: viewModel.transferHistory)
 
         // Refresh callbacks on every SwiftUI update so closures that capture
-        // @State variables (like showTextShare) always stay current.
+        // @State variables (like showFilePicker) always stay current.
         uiViewController.onShareText     = onShareText
         uiViewController.onSharePhoto    = onSharePhoto
-        uiViewController.onShareDocument = onShareDocument
+        uiViewController.onShareFile     = onShareFile
         uiViewController.onShareContact  = onShareContact
         uiViewController.onClearSelection = { viewModel.disconnectAll() }
     }

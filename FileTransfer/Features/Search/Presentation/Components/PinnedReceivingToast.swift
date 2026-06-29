@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 struct PinnedReceivingToast: UIViewRepresentable {
-    let transfer: IncomingMediaTransfer?
+    let progress: ReceivingProgress?
 
     func makeUIView(context: Context) -> UIView {
         let v = UIView()
@@ -12,8 +12,8 @@ struct PinnedReceivingToast: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
-        if let transfer {
-            context.coordinator.show(transfer: transfer, anchoredTo: uiView)
+        if let progress {
+            context.coordinator.show(progress: progress, anchoredTo: uiView)
         } else {
             context.coordinator.hide()
         }
@@ -26,10 +26,10 @@ struct PinnedReceivingToast: UIViewRepresentable {
         private var host: UIHostingController<ReceivingToastCapsule>?
         private var activeTransferID: String?
 
-        func show(transfer: IncomingMediaTransfer, anchoredTo view: UIView) {
-            let newView = ReceivingToastCapsule(transfer: transfer)
+        func show(progress: ReceivingProgress, anchoredTo view: UIView) {
+            let newView = ReceivingToastCapsule(progress: progress)
 
-            if let host, activeTransferID == transfer.id {
+            if let host, activeTransferID == progress.id {
                 host.rootView = newView
                 return
             }
@@ -65,7 +65,7 @@ struct PinnedReceivingToast: UIViewRepresentable {
 
             toastWindow = window
             host = newHost
-            activeTransferID = transfer.id
+            activeTransferID = progress.id
         }
 
         func hide() {
@@ -88,13 +88,13 @@ struct PinnedReceivingToast: UIViewRepresentable {
 }
 
 private struct ReceivingToastCapsule: View {
-    let transfer: IncomingMediaTransfer
+    let progress: ReceivingProgress
 
     var body: some View {
         HStack(spacing: 8) {
             ProgressView()
                 .scaleEffect(0.8)
-            Text("\(transfer.senderName) · \(transfer.receivedCount) of \(transfer.totalCount)")
+            Text("\(progress.senderName) · \(progress.receivedCount) of \(progress.totalCount)")
                 .font(.subheadline.weight(.semibold))
         }
         .padding(.horizontal, 18)

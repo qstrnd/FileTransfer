@@ -23,6 +23,12 @@ protocol PeerSessionEvents: AnyObject {
     func contactReceived(data: Data, from peer: Peer)
     func peerPinged(_ peer: Peer)
     func peerPonged(_ peer: Peer)
+    func fileTransferStarted(transferID: String, totalCount: Int, from peer: Peer)
+    func fileItemReceived(
+        transferID: String, index: Int, totalCount: Int,
+        at url: URL, name: String,
+        from peer: Peer
+    )
 }
 
 // MARK: - PeerSessionAdapter
@@ -59,5 +65,20 @@ final class PeerSessionAdapter: NearbySessionServiceDelegate {
 
     func didReceiveContact(data: Data, from peer: Peer) {
         events?.contactReceived(data: data, from: peer)
+    }
+
+    func didStartReceivingFile(transferID: String, totalCount: Int, from peer: Peer) {
+        events?.fileTransferStarted(transferID: transferID, totalCount: totalCount, from: peer)
+    }
+
+    func didReceiveFile(
+        transferID: String, index: Int, totalCount: Int,
+        at url: URL, name: String,
+        from peer: Peer
+    ) {
+        events?.fileItemReceived(
+            transferID: transferID, index: index, totalCount: totalCount,
+            at: url, name: name, from: peer
+        )
     }
 }

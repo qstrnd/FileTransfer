@@ -6,7 +6,7 @@ struct SearchView: View {
 
     @State private var showRings = false
     @State private var showText = false
-    @State private var showDataExchange = false
+    @State private var showFilePicker = false
     @State private var showTextShare = false
     @State private var showMediaPicker = false
     @State private var showContactPicker = false
@@ -50,10 +50,10 @@ struct SearchView: View {
         .overlay {
             TransferCurtainView(
                 viewModel: viewModel,
-                onShareText:     { showTextShare = true },
-                onSharePhoto:    { showMediaPicker = true },
-                onShareDocument: { showDataExchange = true },
-                onShareContact:  { showContactPicker = true }
+                onShareText:    { showTextShare = true },
+                onSharePhoto:   { showMediaPicker = true },
+                onShareFile:    { showFilePicker = true },
+                onShareContact: { showContactPicker = true }
             )
             .ignoresSafeArea()
         }
@@ -79,7 +79,10 @@ struct SearchView: View {
             isInteractive: true,
             hideDelay: 0.2
         ))
-        .background(PinnedReceivingToast(transfer: viewModel.receivingMediaTransfer))
+        .background(PinnedReceivingToast(
+            progress: viewModel.receivingMediaTransfer?.receivingProgress
+                ?? viewModel.receivingFileTransfer?.receivingProgress
+        ))
         .background(PinnedWindow(
             content: ReceivedMediaAlert(
                 transfer: viewModel.receivedMedia,
@@ -94,12 +97,32 @@ struct SearchView: View {
             hideDelay: 0.2
         ))
         .background(PinnedWindow(
+            content: ReceivedFileAlert(
+                transfer: viewModel.receivedFiles,
+                onDismiss: { viewModel.receivedFiles = nil },
+                onSaveToFiles: { viewModel.fileSaveService.saveToFiles($0) },
+                onShare:       { viewModel.fileSaveService.share($0) }
+            ),
+            isVisible: viewModel.receivedFiles != nil,
+            isInteractive: true,
+            hideDelay: 0.2
+        ))
+        .background(PinnedWindow(
             content: SendingTransferAlert(
                 transfer: viewModel.outgoingMediaTransfer?.sendingStatus,
                 onAbort: { viewModel.abortMediaTransfer() }
             ),
             isVisible: viewModel.outgoingMediaTransfer != nil,
             isInteractive: viewModel.outgoingMediaTransfer != nil,
+            hideDelay: 0.45
+        ))
+        .background(PinnedWindow(
+            content: SendingTransferAlert(
+                transfer: viewModel.outgoingFileTransfer?.sendingStatus,
+                onAbort: { viewModel.abortFileTransfer() }
+            ),
+            isVisible: viewModel.outgoingFileTransfer != nil,
+            isInteractive: viewModel.outgoingFileTransfer != nil,
             hideDelay: 0.45
         ))
         .background(PinnedWindow(
@@ -140,8 +163,14 @@ struct SearchView: View {
                 onCancel: { showMediaPicker = false }
             )
         }
-        .fullScreenCover(isPresented: $showDataExchange) {
-            DataExchangeView()
+        .fullScreenCover(isPresented: $showFilePicker) {
+            FilePickerView(
+                onComplete: { urls in
+                    showFilePicker = false
+                    viewModel.sendFiles(urls)
+                },
+                onCancel: { showFilePicker = false }
+            )
         }
         .fullScreenCover(isPresented: $showContactPicker) {
             ContactPickerView(

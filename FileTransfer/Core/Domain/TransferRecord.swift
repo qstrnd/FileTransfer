@@ -5,7 +5,7 @@ enum TransferDirection: Sendable {
 }
 
 enum TransferType: Sendable {
-    case text, photo, document, contact
+    case text, photo, document, contact, file
 
     var systemImage: String {
         switch self {
@@ -13,6 +13,7 @@ enum TransferType: Sendable {
         case .photo:    "photo"
         case .document: "doc"
         case .contact:  "person"
+        case .file:     "doc.fill"
         }
     }
 
@@ -22,6 +23,7 @@ enum TransferType: Sendable {
         case .photo:    "Photo"
         case .document: "Document"
         case .contact:  "Contact"
+        case .file:     "File"
         }
     }
 }

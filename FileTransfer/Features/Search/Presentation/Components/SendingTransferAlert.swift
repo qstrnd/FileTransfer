@@ -23,6 +23,12 @@ extension OutgoingContactTransfer {
     }
 }
 
+extension OutgoingFileTransfer {
+    var sendingStatus: SendingTransferStatus {
+        SendingTransferStatus(id: id, totalItems: totalFiles, peerCount: peerCount, isComplete: isComplete)
+    }
+}
+
 struct SendingTransferAlert: View {
     let transfer: SendingTransferStatus?
     let onAbort: () -> Void

@@ -20,6 +20,12 @@ protocol NearbySessionServiceDelegate: AnyObject {
     func didReceiveContact(data: Data, from peer: Peer)
     func didReceivePing(from peer: Peer)
     func didReceivePong(from peer: Peer)
+    func didStartReceivingFile(transferID: String, totalCount: Int, from peer: Peer)
+    func didReceiveFile(
+        transferID: String, index: Int, totalCount: Int,
+        at url: URL, name: String,
+        from peer: Peer
+    )
 }
 
 extension NearbySessionServiceDelegate {
@@ -33,6 +39,12 @@ extension NearbySessionServiceDelegate {
     func didReceiveContact(data: Data, from peer: Peer) {}
     func didReceivePing(from peer: Peer) {}
     func didReceivePong(from peer: Peer) {}
+    func didStartReceivingFile(transferID: String, totalCount: Int, from peer: Peer) {}
+    func didReceiveFile(
+        transferID: String, index: Int, totalCount: Int,
+        at url: URL, name: String,
+        from peer: Peer
+    ) {}
 }
 
 @MainActor
@@ -44,6 +56,7 @@ protocol NearbySessionService: AnyObject {
     func disconnect(from peer: Peer)
     func send(text: String, to peer: Peer)
     func sendMedia(_ files: [MediaFileToSend], to peer: Peer, onItemSent: @escaping @MainActor () -> Void)
+    func sendFiles(_ files: [FileToSend], to peer: Peer, onItemSent: @escaping @MainActor () -> Void)
     func sendContact(data: Data, to peer: Peer)
     func sendPing(to peer: Peer)
     func sendPong(to peer: Peer)
@@ -55,6 +68,7 @@ extension NearbySessionService {
     func connect(to peer: Peer) { connect(to: peer, isReconnect: false) }
     func disconnect(from peer: Peer) {}
     func sendMedia(_ files: [MediaFileToSend], to peer: Peer, onItemSent: @escaping @MainActor () -> Void) {}
+    func sendFiles(_ files: [FileToSend], to peer: Peer, onItemSent: @escaping @MainActor () -> Void) {}
     func sendContact(data: Data, to peer: Peer) {}
     func sendPing(to peer: Peer) {}
     func sendPong(to peer: Peer) {}

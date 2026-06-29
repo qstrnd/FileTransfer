@@ -101,12 +101,12 @@ extension TransferCurtainViewController {
         headerView.addSubview(selRow)
 
         // Action buttons row
-        textButton.addTarget(self,     action: #selector(textTapped),     for: .touchUpInside)
-        photoButton.addTarget(self,    action: #selector(photoTapped),    for: .touchUpInside)
-        documentButton.addTarget(self, action: #selector(documentTapped), for: .touchUpInside)
-        contactButton.addTarget(self,  action: #selector(contactTapped),  for: .touchUpInside)
+        textButton.addTarget(self,    action: #selector(textTapped),    for: .touchUpInside)
+        photoButton.addTarget(self,   action: #selector(photoTapped),   for: .touchUpInside)
+        fileButton.addTarget(self,    action: #selector(fileTapped),    for: .touchUpInside)
+        contactButton.addTarget(self, action: #selector(contactTapped), for: .touchUpInside)
 
-        let actionsRow = UIStackView(arrangedSubviews: [contactButton, documentButton, photoButton, textButton])
+        let actionsRow = UIStackView(arrangedSubviews: [contactButton, fileButton, photoButton, textButton])
         actionsRow.axis = .horizontal
         actionsRow.distribution = .fillEqually
         actionsRow.translatesAutoresizingMaskIntoConstraints = false
