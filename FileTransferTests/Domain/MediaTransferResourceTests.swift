@@ -70,7 +70,6 @@ struct MediaTransferResourceTests {
         #expect(MediaTransferResource(parsing: "media_ABC123_0_3_") == nil)
     }
 
-    @Test func rejectsTooManyComponents() {
-        #expect(MediaTransferResource(parsing: "media_ABC_0_3_jpg_extra") == nil)
-    }
+    // Note: 6 components is now valid — the 6th is the optional Live Photo kind tag.
+    // There is no upper limit on components; unknown extras are ignored for forward compatibility.
 }

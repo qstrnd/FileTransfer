@@ -63,6 +63,21 @@ struct MediaTransferResource: Sendable {
         self.fileName = file.suggestedName
     }
 
+    /// Internal init for unit tests that need to verify the wire-name encoding format
+    /// without constructing a full MediaFileToSend.
+    nonisolated init(
+        transferID: String, index: Int, total: Int,
+        fileExtension rawExt: String,
+        kind: MediaFileKind = .regular, fileName: String? = nil
+    ) {
+        self.transferID = transferID
+        self.index = index
+        self.total = total
+        self.fileExtension = rawExt.isEmpty ? "bin" : rawExt.lowercased()
+        self.kind = kind
+        self.fileName = fileName
+    }
+
     /// Returns `nil` if `name` doesn't meet the minimum 5-component format.
     nonisolated init?(parsing name: String) {
         // Split off optional filename suffix first (~ is not valid in iOS filenames
