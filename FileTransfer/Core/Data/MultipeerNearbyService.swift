@@ -255,6 +255,13 @@ extension MultipeerNearbyService: MCNearbyServiceBrowserDelegate {
 
     nonisolated func browser(_ browser: MCNearbyServiceBrowser, lostPeer peerID: MCPeerID) {
         MultipeerNearbyService.log.info("lostPeer \(peerID.displayName, privacy: .public)")
+        // If a peer relaunched with the same display name, foundPeer for the new
+        // MCPeerID already updated the registry slot. A later lostPeer for the old
+        // MCPeerID must not evict the new entry — ignore it via identity check.
+        guard registry.mcPeerID(for: peerID.displayName) === peerID else {
+            MultipeerNearbyService.log.info("lostPeer — stale MCPeerID ignored for \(peerID.displayName, privacy: .public)")
+            return
+        }
         let peer = registry.peer(for: peerID)
         registry.peerLost(displayName: peerID.displayName)
         Task { @MainActor [weak self] in self?.delegate?.didLose(peer: peer) }

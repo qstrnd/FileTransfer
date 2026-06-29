@@ -55,9 +55,21 @@ final class SearchViewModel {
 
     /// Tracks peers we invited with isReconnect=true so peerConnected can show the toast.
     private var reconnectingPeers: Set<Peer.ID> = []
+    /// Subset of reconnectingPeers: those initiated within 10 s of launch or foreground-return.
+    /// Used to show "Connections are restored" on the relaunched side instead of "NAME is connected".
+    private var recentlyLaunchedPeers: Set<Peer.ID> = []
     /// Tracks the last received pong timestamp per peer for keepalive detection.
     private var lastPongReceived: [Peer.ID: Date] = [:]
     private var keepaliveTask: Task<Void, Never>?
+    /// True during the brief window after returning from background, so maybeAutoReconnect
+    /// always initiates — ensuring the returning device sees "Connections are restored".
+    private var isReturningFromBackground = false
+    /// True for 10 s after any launch (cold or foreground-return). Auto-reconnects during
+    /// this window show "Connections are restored" on this device, not "NAME is connected".
+    private var isRecentlyLaunched = false
+    /// Peers for which peerLost fired while they were connecting/connected.
+    /// Eviction from discoveredPeers is deferred until peerDisconnected fires.
+    private var pendingLostPeers: Set<Peer.ID> = []
 
     init(
         emoji: String,
@@ -88,6 +100,11 @@ final class SearchViewModel {
 
     func start() {
         log.info("start — emoji=\(self.emoji, privacy: .public) deviceID=\(self.deviceID, privacy: .public)")
+        isRecentlyLaunched = true
+        Task {
+            try? await Task.sleep(for: .seconds(10))
+            isRecentlyLaunched = false
+        }
         service.delegate = sessionAdapter
         service.start(displayName: "\(emoji) \(name)", deviceID: deviceID)
         startKeepalive()
@@ -100,13 +117,39 @@ final class SearchViewModel {
         service.stop()
     }
 
+    /// Called the moment the app enters the background.
+    /// Stops the MPC service so peers receive a `.notConnected` callback immediately
+    /// rather than waiting for the session to time out on its own.
+    func handleBackground() {
+        log.info("handleBackground — stopping service")
+        stopKeepalive()
+        // Clear state first so the .notConnected callbacks that service.stop() triggers
+        // find an already-clean peerStates and don't show spurious local toasts.
+        withAnimation {
+            peerStates = [:]
+            discoveredPeers = []
+            pendingInvitationFrom = nil
+            expiredInvitationFrom = nil
+        }
+        service.stop()
+    }
+
     /// Called when the app returns to the foreground. Tears down the current
     /// MPC session (disconnecting all peers) and restarts advertising/browsing
     /// so discovery begins fresh without stale peer state.
     func handleForeground() {
         log.info("handleForeground — resetting session")
+        isReturningFromBackground = true
+        isRecentlyLaunched = true
+        Task {
+            try? await Task.sleep(for: .seconds(10))
+            isReturningFromBackground = false
+            isRecentlyLaunched = false
+        }
         reconnectingPeers = []
+        recentlyLaunchedPeers = []
         lastPongReceived = [:]
+        pendingLostPeers = []
         // Clear state BEFORE stopping so that any async delegate callbacks
         // triggered by session.disconnect() land on an already-clean map
         // and cannot re-set peers to .connected.
@@ -141,7 +184,10 @@ final class SearchViewModel {
             return
         }
         peerStates[peer] = next
-        if isReconnect { reconnectingPeers.insert(peer.id) }
+        if isReconnect {
+            reconnectingPeers.insert(peer.id)
+            if isRecentlyLaunched { recentlyLaunchedPeers.insert(peer.id) }
+        }
         service.connect(to: peer, isReconnect: isReconnect)
 
         // Failsafe: fires 3 s after the MPC invitation timeout so MPC's own
@@ -207,7 +253,7 @@ final class SearchViewModel {
         keepaliveTask?.cancel()
         keepaliveTask = Task {
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(20))
+                try? await Task.sleep(for: .seconds(5))
                 guard !Task.isCancelled else { return }
                 checkKeepalive()
             }
@@ -220,10 +266,12 @@ final class SearchViewModel {
         lastPongReceived = [:]
     }
 
-    private func checkKeepalive() {
-        let now = Date.now
+    private func checkKeepalive() { checkKeepalive(now: .now) }
+
+    // Internal so tests can inject a specific timestamp without waiting real time.
+    func checkKeepalive(now: Date) {
         for peer in connectedPeers {
-            if let last = lastPongReceived[peer.id], now.timeIntervalSince(last) > 50 {
+            if let last = lastPongReceived[peer.id], now.timeIntervalSince(last) > 15 {
                 log.warning("keepalive — no pong from \(peer.displayName, privacy: .public), disconnecting")
                 service.disconnect(from: peer)
             } else {
@@ -286,6 +334,14 @@ final class SearchViewModel {
 extension SearchViewModel: PeerSessionEvents {
     func peerDiscovered(_ peer: Peer) {
         log.info("didDiscover — \(peer.displayName, privacy: .public) deviceID=\(peer.deviceID?.uuidString ?? "nil", privacy: .public)")
+        // MPC can report the local device's own advertiser in edge cases (e.g. after
+        // a service restart). Reject by UUID so we never show ourselves as a peer.
+        guard peer.deviceID != deviceID else {
+            log.warning("didDiscover — ignoring self-discovery for \(peer.displayName, privacy: .public)")
+            return
+        }
+        // If we deferred a peerLost for this peer, the peer came back — cancel the deferral.
+        pendingLostPeers.remove(peer.id)
         guard !discoveredPeers.contains(peer) else { return }
         withAnimation(.spring(duration: 0.35)) { discoveredPeers.append(peer) }
         maybeAutoReconnect(to: peer)
@@ -294,10 +350,12 @@ extension SearchViewModel: PeerSessionEvents {
     private func maybeAutoReconnect(to peer: Peer) {
         guard let peerDeviceID = peer.deviceID,
               connectionHistory.hasConnected(to: peerDeviceID),
-              (peerStates[peer] ?? .idle) == .idle,
-              // Tiebreaker: the device with the higher UUID string initiates to
-              // prevent both sides from sending crossing invitations simultaneously.
-              deviceID.uuidString > peerDeviceID.uuidString else { return }
+              (peerStates[peer] ?? .idle) == .idle else { return }
+        // When returning from background we always initiate so that the toast
+        // ("Connections are restored") appears on the correct device. For cold
+        // launch the UUID tiebreaker prevents both sides from sending simultaneous
+        // crossing invitations.
+        guard isReturningFromBackground || deviceID.uuidString > peerDeviceID.uuidString else { return }
 
         log.info("peerDiscovered — scheduling auto-reconnect to \(peer.displayName, privacy: .public)")
         Task {
@@ -311,6 +369,16 @@ extension SearchViewModel: PeerSessionEvents {
 
     func peerLost(_ peer: Peer) {
         log.info("didLose — \(peer.displayName, privacy: .public)")
+        let state = peerStates[peer] ?? .idle
+        // A transient lostPeer while the session is live must not wipe state.
+        // Doing so allows peerDiscovered to re-trigger maybeAutoReconnect, which
+        // sends a second invitation to an already-connected peer and disrupts the session.
+        // Defer the discoveredPeers eviction to peerDisconnected instead.
+        if state == .connecting || state == .connected {
+            log.info("didLose — deferring eviction; peer is \(String(describing: state), privacy: .public) for \(peer.displayName, privacy: .public)")
+            pendingLostPeers.insert(peer.id)
+            return
+        }
         withAnimation(.spring(duration: 0.35)) {
             discoveredPeers.removeAll { $0 == peer }
             peerStates.removeValue(forKey: peer)
@@ -344,13 +412,20 @@ extension SearchViewModel: PeerSessionEvents {
         log.debug("didConnect — state → \(String(describing: next), privacy: .public); history updated")
 
         if reconnectingPeers.remove(peer.id) != nil {
-            showConnectionsRestoredToast()
+            if recentlyLaunchedPeers.remove(peer.id) != nil {
+                showConnectionsRestoredToast()
+            } else {
+                // Already-running device that invited a returning peer: show their name.
+                showReconnectedPeerToast(for: peer)
+            }
         }
     }
 
     func peerDisconnected(_ peer: Peer) {
         lastPongReceived.removeValue(forKey: peer.id)
         reconnectingPeers.remove(peer.id)
+        recentlyLaunchedPeers.remove(peer.id)
+        let wasLost = pendingLostPeers.remove(peer.id) != nil
         let current = peerStates[peer] ?? .idle
         let event: ConnectionEvent = (current == .connecting) ? .connectionDeclined : .peerDisconnected
         log.info("didDisconnect — \(peer.displayName, privacy: .public) currentState=\(String(describing: current), privacy: .public) event=\(String(describing: event), privacy: .public)")
@@ -382,10 +457,24 @@ extension SearchViewModel: PeerSessionEvents {
                 log.debug("didDisconnect — rejected state cleared for \(peer.displayName, privacy: .public)")
             }
         }
+
+        // If peerLost was deferred because the peer was connected/connecting at the time,
+        // flush the eviction from discoveredPeers now that the session has actually dropped.
+        if wasLost {
+            withAnimation(.spring(duration: 0.35)) {
+                discoveredPeers.removeAll { $0 == peer }
+            }
+        }
     }
 
     func invitationReceived(from peer: Peer) {
         log.info("didReceiveInvitation — from \(peer.displayName, privacy: .public)")
+        let inviteState = peerStates[peer] ?? .idle
+        guard inviteState == .idle else {
+            log.info("didReceiveInvitation — declining; already \(String(describing: inviteState), privacy: .public) for \(peer.displayName, privacy: .public)")
+            service.declineInvitation()
+            return
+        }
         pendingInvitationFrom = peer
 
         // Auto-dismiss the alert after the MPC invitation timeout so the alert
@@ -405,8 +494,22 @@ extension SearchViewModel: PeerSessionEvents {
 
     func reconnectInvitationReceived(from peer: Peer) {
         log.info("reconnectInvitationReceived — from \(peer.displayName, privacy: .public)")
-        guard let peerDeviceID = peer.deviceID,
-              connectionHistory.hasConnected(to: peerDeviceID) else {
+        let reconnectState = peerStates[peer] ?? .idle
+        guard reconnectState == .idle else {
+            log.info("reconnectInvitationReceived — declining; already \(String(describing: reconnectState), privacy: .public) for \(peer.displayName, privacy: .public)")
+            service.declineInvitation()
+            return
+        }
+        // deviceID may be nil if the browser hasn't fired foundPeer yet; fall back to
+        // display-name matching so the race between advertiser and browser callbacks
+        // doesn't cause a reconnect to show the manual-accept alert.
+        let isKnown: Bool
+        if let peerDeviceID = peer.deviceID {
+            isKnown = connectionHistory.hasConnected(to: peerDeviceID)
+        } else {
+            isKnown = connectionHistory.allRecords().contains { $0.displayName == peer.displayName }
+        }
+        guard isKnown else {
             log.info("reconnectInvitationReceived — peer not in history, falling back to manual invite for \(peer.displayName, privacy: .public)")
             invitationReceived(from: peer)
             return
@@ -414,7 +517,11 @@ extension SearchViewModel: PeerSessionEvents {
         log.info("reconnectInvitationReceived — auto-accepting for \(peer.displayName, privacy: .public)")
         withAnimation { peerStates[peer] = .connected }
         service.acceptInvitation()
-        showReconnectedPeerToast(for: peer)
+        if isRecentlyLaunched {
+            showConnectionsRestoredToast()
+        } else {
+            showReconnectedPeerToast(for: peer)
+        }
     }
 
     func peerPinged(_ peer: Peer) {

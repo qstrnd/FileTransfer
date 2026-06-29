@@ -8,6 +8,14 @@ struct Peer: Sendable, Identifiable, Hashable {
 
     nonisolated var id: String { displayName }
 
+    // Equality and hashing are keyed on displayName only, consistent with `id`.
+    // This ensures that Peer(displayName: X, deviceID: nil) — produced by the
+    // advertiser callback before the browser fires foundPeer — and
+    // Peer(displayName: X, deviceID: someUUID) — produced after foundPeer — are
+    // treated as the same peer for peerStates dictionary lookups.
+    nonisolated static func == (lhs: Peer, rhs: Peer) -> Bool { lhs.displayName == rhs.displayName }
+    nonisolated func hash(into hasher: inout Hasher) { hasher.combine(displayName) }
+
     nonisolated init(displayName: String, deviceID: UUID? = nil) {
         self.displayName = displayName
         self.deviceID = deviceID

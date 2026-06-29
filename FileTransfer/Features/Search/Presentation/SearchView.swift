@@ -166,6 +166,9 @@ struct SearchView: View {
                 // scenePhase never jumps directly background→active; it passes
                 // through .inactive, so old==.background never holds on .active.
                 didBackground = true
+                // Stop the service immediately so connected peers receive a
+                // .notConnected callback right away instead of waiting for timeout.
+                viewModel.handleBackground()
 
             case .active where didBackground:
                 didBackground = false
