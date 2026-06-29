@@ -6,6 +6,7 @@ struct PeerCell: View {
     let peer: Peer
     let state: PeerConnectionState
     let onTap: () -> Void
+    var size: CGFloat = 100
 
     // Both are driven by local state so they can fade independently
     // of the PeerConnectionState value — the cell stays in .rejected
@@ -13,9 +14,10 @@ struct PeerCell: View {
     @State private var lockOpacity: Double = 0
     @State private var rejectedRingOpacity: Double = 0
 
-    private let circleSize: CGFloat = 100
     private let ringLineWidth: CGFloat = 3
     private let rejectedFadeDuration: TimeInterval = 0.5
+
+    private var emojiSize: CGFloat { size * 0.44 }
 
     var body: some View {
         Button(action: onTap) {
@@ -23,11 +25,11 @@ struct PeerCell: View {
                 ZStack {
                     Circle()
                         .fill(.white)
-                        .frame(width: circleSize, height: circleSize)
+                        .frame(width: size, height: size)
                         .shadow(color: .black.opacity(0.07), radius: 10, x: 0, y: 2)
 
                     Text(peer.emojiComponent)
-                        .font(.system(size: 44))
+                        .font(.system(size: emojiSize))
 
                     // Lock icon — always in the hierarchy so opacity can animate
                     // freely; only visible when lockOpacity > 0.
@@ -43,12 +45,12 @@ struct PeerCell: View {
                     // This keeps rejectedRingOpacity / lockOpacity free to animate
                     // at their own duration via withAnimation in onChange.
                     if state == .connecting {
-                        SpinnerRing(diameter: circleSize - ringLineWidth)
+                        SpinnerRing(diameter: size - ringLineWidth)
                             .transition(.opacity.animation(.easeInOut(duration: 0.35)))
                     } else if state == .connected {
                         Circle()
                             .strokeBorder(Color.accentColor, lineWidth: ringLineWidth)
-                            .frame(width: circleSize, height: circleSize)
+                            .frame(width: size, height: size)
                             .transition(.opacity.animation(.easeInOut(duration: 0.35)))
                     }
 
@@ -56,7 +58,7 @@ struct PeerCell: View {
                     // in onChange so it's unaffected by any implicit animation.
                     Circle()
                         .strokeBorder(Color.red.opacity(0.7), lineWidth: 2)
-                        .frame(width: circleSize, height: circleSize)
+                        .frame(width: size, height: size)
                         .opacity(rejectedRingOpacity)
                 }
                 .overlay(alignment: .topLeading) {

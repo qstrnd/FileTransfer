@@ -24,7 +24,7 @@ extension TransferCurtainViewController {
         let ty = CGAffineTransform(translationX: 0, y: clamped)
         let range = collapsedOffset - expandedOffset
         let progress = range > 0 ? 1.0 - (clamped - expandedOffset) / range : 0.0
-        let scrimAlpha = CGFloat(progress) * 0.45
+        let scrimAlpha = scrimEnabled ? CGFloat(progress) * 0.45 : 0
 
         if animated {
             let params = UISpringTimingParameters(dampingRatio: 0.78, initialVelocity: .zero)
@@ -158,12 +158,25 @@ extension TransferCurtainViewController {
             scrimView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             scrimView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
 
-            // Sheet — below status bar, full width, extends to screen bottom
+            // Sheet — below status bar, extends to screen bottom
             sheetView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            sheetView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            sheetView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             sheetView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
 
+        // Sheet horizontal placement: full-width on iPhone, centred+capped on iPad.
+        if let maxWidth = maxSheetWidth {
+            NSLayoutConstraint.activate([
+                sheetView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                sheetView.widthAnchor.constraint(equalToConstant: maxWidth),
+            ])
+        } else {
+            NSLayoutConstraint.activate([
+                sheetView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                sheetView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            ])
+        }
+
+        NSLayoutConstraint.activate([
             // Grab pill: centered at top of sheet
             grabPill.centerXAnchor.constraint(equalTo: sheetView.centerXAnchor),
             grabPill.topAnchor.constraint(equalTo: sheetView.topAnchor, constant: 8),

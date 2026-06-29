@@ -111,6 +111,7 @@ struct ReceivedMediaAlert: View {
             .padding(.vertical, 2)
         }
         .glassEffect(in: RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
+        .frame(maxWidth: 400)
         .padding(.horizontal, 24)
     }
 

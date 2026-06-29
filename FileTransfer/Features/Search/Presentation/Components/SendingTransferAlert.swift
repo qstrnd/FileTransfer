@@ -102,6 +102,7 @@ struct SendingTransferAlert: View {
         }
         .glassEffect(in: RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
         .animation(.spring(duration: 0.35), value: transfer.isComplete)
+        .frame(maxWidth: 400)
         .padding(.horizontal, 40)
     }
 }

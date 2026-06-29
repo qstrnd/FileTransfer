@@ -91,6 +91,7 @@ struct InvitationAlert: View {
         // Liquid Glass card background (iOS 26). glassEffect clips to the shape
         // and composites the underlying content through the glass material.
         .glassEffect(in: RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
+        .frame(maxWidth: 400)
         .padding(.horizontal, 36)
     }
 }

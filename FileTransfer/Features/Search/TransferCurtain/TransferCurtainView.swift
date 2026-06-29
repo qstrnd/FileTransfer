@@ -8,6 +8,10 @@ import UIKit
 /// inside its view, so no additional SwiftUI frame or offset is needed.
 struct TransferCurtainView: UIViewControllerRepresentable {
     var viewModel: SearchViewModel
+    var disableScrim: Bool = false
+    /// Portrait-only: when set the sheet is centred at this fixed width (iPad).
+    /// Nil keeps the default full-width behaviour (iPhone).
+    var maxSheetWidth: CGFloat? = nil
 
     // Called when the user taps a share action button.
     var onShareText:    () -> Void
@@ -16,12 +20,15 @@ struct TransferCurtainView: UIViewControllerRepresentable {
     var onShareContact: () -> Void
 
     func makeUIViewController(context: Context) -> TransferCurtainViewController {
-        TransferCurtainViewController()
+        let vc = TransferCurtainViewController()
+        vc.maxSheetWidth = maxSheetWidth
+        return vc
     }
 
     func updateUIViewController(_ uiViewController: TransferCurtainViewController, context: Context) {
         uiViewController.update(selectedCount: viewModel.connectedPeers.count)
         uiViewController.update(history: viewModel.transferHistory)
+        uiViewController.setScrimEnabled(!disableScrim)
 
         // Refresh callbacks on every SwiftUI update so closures that capture
         // @State variables (like showFilePicker) always stay current.

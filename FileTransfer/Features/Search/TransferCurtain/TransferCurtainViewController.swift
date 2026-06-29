@@ -136,6 +136,16 @@ final class TransferCurtainViewController: UIViewController {
         applySnapshot()
     }
 
+    var scrimEnabled = true
+    /// Set before viewDidLoad to constrain the sheet to a centred fixed width.
+    /// Nil (default) makes the sheet span the full view width, matching iPhone portrait.
+    var maxSheetWidth: CGFloat?
+
+    func setScrimEnabled(_ enabled: Bool) {
+        scrimEnabled = enabled
+        if !enabled { scrimView.alpha = 0 }
+    }
+
     // MARK: - Selection UI
 
     func updateSelectionUI() {

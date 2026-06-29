@@ -12,50 +12,31 @@ struct SearchView: View {
     @State private var showContactPicker = false
     @State private var didBackground = false
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     var body: some View {
-        ZStack {
-            Color(.systemGroupedBackground).ignoresSafeArea()
+        GeometryReader { geo in
+            let isLandscape = geo.size.width > geo.size.height
+            let isIPad = horizontalSizeClass == .regular
+            // iPad landscape: ~44% of landscape width (similar to 2/3 of portrait height).
+            // iPhone landscape: capped at 340 using portrait height reference.
+            let curtainPanelWidth: CGFloat = isIPad
+                ? min(geo.size.width * 0.44, 560)
+                : min(geo.size.height * 0.85, 340)
+            let curtainRightMargin: CGFloat = 16
+            let leftWidth: CGFloat = geo.size.width - curtainPanelWidth - curtainRightMargin
+            // Portrait iPad: centre the sheet at 2/3 of portrait width; iPhone full-width.
+            let portraitMaxSheetWidth: CGFloat? = isIPad
+                ? min(geo.size.width * (2.0 / 3.0), 620)
+                : nil
 
-            VStack(spacing: 0) {
-                SearchHeroSection(viewModel: viewModel, namespace: namespace, showRings: showRings)
-                    .padding(.top, 60)
-                    .zIndex(1)
-
-                // Content area always fills remaining space so the VStack height
-                // equals the full screen height from the very first render frame,
-                // keeping the hero circle at a stable position throughout.
-                ZStack {
-                    if viewModel.discoveredPeers.isEmpty {
-                        if showText {
-                            VStack {
-                                Spacer()
-                                SearchingText()
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, 24)
-                                Spacer()
-                                Spacer()
-                            }
-                            .transition(.opacity)
-                        }
-                    } else {
-                        SearchPeerGrid(viewModel: viewModel)
-                            .transition(.opacity)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .animation(.easeInOut(duration: 0.35), value: viewModel.discoveredPeers.isEmpty)
+            if isLandscape {
+                landscapeLayout(leftWidth: leftWidth,
+                                curtainPanelWidth: curtainPanelWidth,
+                                curtainRightMargin: curtainRightMargin)
+            } else {
+                portraitLayout(maxSheetWidth: portraitMaxSheetWidth)
             }
-        }
-        .overlay {
-            TransferCurtainView(
-                viewModel: viewModel,
-                onShareText:    { showTextShare = true },
-                onSharePhoto:   { showMediaPicker = true },
-                onShareFile:    { showFilePicker = true },
-                onShareContact: { showContactPicker = true }
-            )
-            .ignoresSafeArea()
         }
         .background(PinnedToast(peer: viewModel.disconnectedPeer))
         .background(PinnedToast(peer: viewModel.reconnectedPeer, message: "is connected"))
@@ -214,6 +195,123 @@ struct SearchView: View {
                 break
             }
         }
+    }
+
+    // MARK: - Layouts
+
+    private func portraitLayout(maxSheetWidth: CGFloat?) -> some View {
+        ZStack {
+            Color(.systemGroupedBackground).ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                SearchHeroSection(viewModel: viewModel, namespace: namespace, showRings: showRings)
+                    .padding(.top, 60)
+                    .zIndex(1)
+
+                // Content area always fills remaining space so the VStack height
+                // equals the full screen height from the very first render frame,
+                // keeping the hero circle at a stable position throughout.
+                ZStack {
+                    if viewModel.discoveredPeers.isEmpty {
+                        if showText {
+                            VStack {
+                                Spacer()
+                                SearchingText()
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 24)
+                                Spacer()
+                                Spacer()
+                            }
+                            .transition(.opacity)
+                        }
+                    } else {
+                        SearchPeerGrid(viewModel: viewModel)
+                            .transition(.opacity)
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .animation(.easeInOut(duration: 0.35), value: viewModel.discoveredPeers.isEmpty)
+            }
+        }
+        .overlay {
+            portraitCurtainView(maxSheetWidth: maxSheetWidth).ignoresSafeArea()
+        }
+    }
+
+    private func landscapeLayout(leftWidth: CGFloat,
+                                 curtainPanelWidth: CGFloat,
+                                 curtainRightMargin: CGFloat) -> some View {
+        // Left: portrait-equivalent peer area bounded to leftWidth.
+        // Right: hero centred in the clear space above the curtain peek, curtain behind it.
+        ZStack(alignment: .leading) {
+            Color(.systemGroupedBackground).ignoresSafeArea()
+
+            // Left column — same layout as portrait, no curtain-clearance bottom inset.
+            ZStack {
+                if viewModel.discoveredPeers.isEmpty {
+                    if showText {
+                        VStack {
+                            Spacer()
+                            SearchingText()
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 24)
+                            Spacer()
+                            Spacer()
+                        }
+                        .transition(.opacity)
+                    }
+                } else {
+                    SearchPeerGrid(viewModel: viewModel, bottomInset: 40)
+                        .transition(.opacity)
+                }
+            }
+            .frame(width: leftWidth)
+            .animation(.easeInOut(duration: 0.35), value: viewModel.discoveredPeers.isEmpty)
+        }
+        .overlay(alignment: .trailing) {
+            ZStack {
+                // Hero centred vertically between the top edge and the curtain peek.
+                // VStack distributes space: Spacer / hero / Spacer / 208pt peek reserve.
+                // Result: hero sits at the midpoint of (columnHeight - 208).
+                VStack(spacing: 0) {
+                    Spacer()
+                    SearchHeroSection(viewModel: viewModel, namespace: namespace, showRings: showRings)
+                    Spacer()
+                    Color.clear.frame(height: 208)
+                }
+
+                // Curtain fills the panel. PassthroughView passes touches
+                // through the transparent area so the hero above remains tappable.
+                landscapeCurtainView
+                    .ignoresSafeArea()
+            }
+            .frame(width: curtainPanelWidth)
+            .padding(.trailing, curtainRightMargin)
+        }
+    }
+
+    private func portraitCurtainView(maxSheetWidth: CGFloat?) -> some View {
+        TransferCurtainView(
+            viewModel: viewModel,
+            maxSheetWidth: maxSheetWidth,
+            onShareText:    { showTextShare = true },
+            onSharePhoto:   { showMediaPicker = true },
+            onShareFile:    { showFilePicker = true },
+            onShareContact: { showContactPicker = true }
+        )
+    }
+
+    /// Landscape variant: scrim suppressed so the dark backdrop doesn't appear
+    /// over the hero when the curtain expands. Shadow is unchanged from portrait.
+    private var landscapeCurtainView: some View {
+        TransferCurtainView(
+            viewModel: viewModel,
+            disableScrim: true,
+            onShareText:    { showTextShare = true },
+            onSharePhoto:   { showMediaPicker = true },
+            onShareFile:    { showFilePicker = true },
+            onShareContact: { showContactPicker = true }
+        )
     }
 }
 
