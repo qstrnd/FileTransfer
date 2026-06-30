@@ -36,6 +36,10 @@ struct TransferRecord: Identifiable, Hashable, Sendable {
     let direction: TransferDirection
     let type: TransferType
     let detail: String?
+    /// Persistent file:// URLs for cached attachment copies. Empty when not applicable.
+    let attachmentURLs: [URL]
+    /// Combined byte count of all attachments; nil for types with no files (e.g. text).
+    let fileBytes: Int64?
 
     init(
         id: UUID = UUID(),
@@ -44,7 +48,9 @@ struct TransferRecord: Identifiable, Hashable, Sendable {
         date: Date = .now,
         direction: TransferDirection,
         type: TransferType,
-        detail: String? = nil
+        detail: String? = nil,
+        attachmentURLs: [URL] = [],
+        fileBytes: Int64? = nil
     ) {
         self.id = id
         self.peerEmoji = peerEmoji
@@ -53,6 +59,8 @@ struct TransferRecord: Identifiable, Hashable, Sendable {
         self.direction = direction
         self.type = type
         self.detail = detail
+        self.attachmentURLs = attachmentURLs
+        self.fileBytes = fileBytes
     }
 
     static func == (lhs: TransferRecord, rhs: TransferRecord) -> Bool { lhs.id == rhs.id }
@@ -61,17 +69,19 @@ struct TransferRecord: Identifiable, Hashable, Sendable {
 
 #if DEBUG
 extension TransferRecord {
-    // Static so UUIDs are created once and remain stable across SwiftUI update cycles.
     static let previews: [TransferRecord] = [
         TransferRecord(peerEmoji: "🦒", peerName: "Cunning Giraffe",
                        date: .now.addingTimeInterval(-120),
-                       direction: .received, type: .photo, detail: "Photo"),
+                       direction: .received, type: .photo, detail: "IMG_4821.HEIC",
+                       fileBytes: 4_400_000),
         TransferRecord(peerEmoji: "🐱", peerName: "Sly Cat",
                        date: .now.addingTimeInterval(-3_600),
-                       direction: .sent, type: .document, detail: "portfolio.pdf"),
+                       direction: .sent, type: .file, detail: "portfolio.pdf",
+                       fileBytes: 1_800_000),
         TransferRecord(peerEmoji: "🐺", peerName: "Puffy Wolf",
                        date: .now.addingTimeInterval(-10_800),
-                       direction: .sent, type: .text, detail: "On my way 👍"),
+                       direction: .sent, type: .text,
+                       detail: "Hey — address for tomorrow: Hammer Steindamm 122, 2nd floor, call me when you arrive"),
     ]
 }
 #endif

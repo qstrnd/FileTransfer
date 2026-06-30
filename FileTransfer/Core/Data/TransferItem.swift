@@ -11,16 +11,18 @@ final class TransferItem {
     var peerName: String
     var date: Date
     var directionRaw: String   // "sent" | "received"
-    var typeRaw: String        // "text" | "photo" | "document" | "contact"
+    var typeRaw: String        // "text" | "photo" | "document" | "contact" | "file"
     var detail: String?
+    /// JSON-encoded array of absolute file:// URL strings for cached attachments.
+    var attachmentURLsJSON: String?
+    /// Combined byte count of all attachments; nil for non-file transfers.
+    var fileBytes: Int64?
 
     init(from record: TransferRecord) {
         self.id        = record.id
         self.peerEmoji = record.peerEmoji
         self.peerName  = record.peerName
         self.date      = record.date
-        // Use switch (pattern matching) instead of == to avoid the @MainActor-isolated
-        // Equatable conformance that SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor produces.
         switch record.direction {
         case .sent:     self.directionRaw = "sent"
         case .received: self.directionRaw = "received"
@@ -33,9 +35,16 @@ final class TransferItem {
         case .file:     self.typeRaw = "file"
         }
         self.detail = record.detail
+        self.fileBytes = record.fileBytes
+
+        let urlStrings = record.attachmentURLs.map(\.absoluteString)
+        if !urlStrings.isEmpty,
+           let data = try? JSONEncoder().encode(urlStrings),
+           let json = String(data: data, encoding: .utf8) {
+            self.attachmentURLsJSON = json
+        }
     }
 
-    // @MainActor required: TransferRecord.init is @MainActor-isolated by default.
     @MainActor var asRecord: TransferRecord {
         let direction: TransferDirection = directionRaw == "sent" ? .sent : .received
         let type: TransferType = switch typeRaw {
@@ -45,9 +54,19 @@ final class TransferItem {
             case "file":     .file
             default:         .text
         }
+
+        var attachmentURLs: [URL] = []
+        if let json = attachmentURLsJSON,
+           let data = json.data(using: .utf8),
+           let strings = try? JSONDecoder().decode([String].self, from: data) {
+            attachmentURLs = strings.compactMap(URL.init(string:))
+                .filter { FileManager.default.fileExists(atPath: $0.path(percentEncoded: false)) }
+        }
+
         return TransferRecord(
             id: id, peerEmoji: peerEmoji, peerName: peerName,
-            date: date, direction: direction, type: type, detail: detail
+            date: date, direction: direction, type: type, detail: detail,
+            attachmentURLs: attachmentURLs, fileBytes: fileBytes
         )
     }
 }
