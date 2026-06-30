@@ -93,15 +93,15 @@ final class HistoryDocumentCell: HistoryBaseCell {
     private func setupContent() {
         card.addSubview(previewImageView)
         card.addSubview(typeBadge)
-        contentView.addSubview(card)
-        contentView.addSubview(metaLabel)
+        contentContainer.addSubview(card)
+        contentContainer.addSubview(metaLabel)
 
         NSLayoutConstraint.activate([
-            // Card: left edge to right edge, 4:3 aspect ratio
-            card.topAnchor.constraint(equalTo: contentTop, constant: 8),
-            card.leadingAnchor.constraint(equalTo: contentLeading, constant: contentInsetLeading),
-            card.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            card.heightAnchor.constraint(equalTo: card.widthAnchor, multiplier: 3.0 / 4.0),
+            // Card: fixed 120pt height
+            card.topAnchor.constraint(equalTo: contentContainer.topAnchor, constant: 4),
+            card.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
+            card.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
+            card.heightAnchor.constraint(equalToConstant: 120),
 
             // Preview fills the card
             previewImageView.topAnchor.constraint(equalTo: card.topAnchor),
@@ -117,9 +117,9 @@ final class HistoryDocumentCell: HistoryBaseCell {
 
             // Meta label below card
             metaLabel.topAnchor.constraint(equalTo: card.bottomAnchor, constant: 6),
-            metaLabel.leadingAnchor.constraint(equalTo: card.leadingAnchor),
-            metaLabel.trailingAnchor.constraint(equalTo: card.trailingAnchor),
-            metaLabel.bottomAnchor.constraint(equalTo: contentBottom, constant: -12),
+            metaLabel.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
+            metaLabel.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
+            metaLabel.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor, constant: -10),
         ])
     }
 

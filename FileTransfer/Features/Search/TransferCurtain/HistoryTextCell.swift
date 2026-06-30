@@ -105,15 +105,14 @@ final class HistoryTextCell: HistoryBaseCell {
     private func setupContent() {
         bodyStack.addArrangedSubview(bodyLabel)
         bodyStack.addArrangedSubview(moreButton)
-        contentView.addSubview(bodyStack)
+        contentContainer.addSubview(bodyStack)
 
         NSLayoutConstraint.activate([
-            bodyStack.topAnchor.constraint(equalTo: contentTop, constant: 4),
-            bodyStack.leadingAnchor.constraint(equalTo: contentLeading, constant: contentInsetLeading),
-            bodyStack.trailingAnchor.constraint(equalTo: contentTrailing, constant: contentInsetTrailing),
-            bodyStack.bottomAnchor.constraint(equalTo: contentBottom, constant: -12),
+            bodyStack.topAnchor.constraint(equalTo: contentContainer.topAnchor, constant: 4),
+            bodyStack.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
+            bodyStack.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
+            bodyStack.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor, constant: -12),
 
-            // bodyLabel fills the stack width; moreButton only as wide as its title.
             bodyLabel.widthAnchor.constraint(equalTo: bodyStack.widthAnchor),
         ])
     }

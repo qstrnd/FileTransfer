@@ -1,12 +1,11 @@
 import UIKit
 
-/// Shared scaffold for all history cells.
-/// Lays out: avatar (top-left) | content area (centre) | badge + time (top-right).
-/// Subclasses add their content views between `contentLeading` and `contentTrailing`,
-/// pinned below `contentTop` and above `contentBottom`.
+/// Base cell for all history rows.
+/// Three-column layout: avatar (left 44×44) | content (centre) | badge+time (right, fixed 90pt wide).
+/// Subclasses add their content views to `contentContainer`.
 class HistoryBaseCell: UICollectionViewCell {
 
-    // MARK: - Shared views
+    // MARK: - Header views (rendered above content in Z-order)
 
     let avatarContainer: UIView = {
         let v = UIView()
@@ -30,9 +29,18 @@ class HistoryBaseCell: UICollectionViewCell {
         return b
     }()
 
+    private let timeLabelPill: UIView = {
+        let v = UIView()
+        // Matches cell background — only visible when content (image/doc) appears beneath it.
+        v.backgroundColor = .systemBackground
+        v.layer.cornerRadius = 7
+        v.translatesAutoresizingMaskIntoConstraints = false
+        return v
+    }()
+
     let timeLabel: UILabel = {
         let l = UILabel()
-        l.font = .systemFont(ofSize: 12)
+        l.font = .systemFont(ofSize: 11)
         l.textColor = .secondaryLabel
         l.textAlignment = .right
         l.setContentHuggingPriority(.required, for: .horizontal)
@@ -41,21 +49,24 @@ class HistoryBaseCell: UICollectionViewCell {
         return l
     }()
 
+    // MARK: - Content area for subclasses
+
+    /// Sits between the avatar and the right badge column.
+    /// Subclasses add their views here pinned to this container's edges.
+    let contentContainer: UIView = {
+        let v = UIView()
+        v.translatesAutoresizingMaskIntoConstraints = false
+        return v
+    }()
+
+    // MARK: - Separator
+
     let separator: UIView = {
         let v = UIView()
         v.backgroundColor = .separator
         v.translatesAutoresizingMaskIntoConstraints = false
         return v
     }()
-
-    // MARK: - Content-area anchors for subclasses
-
-    var contentLeading: NSLayoutXAxisAnchor { avatarContainer.trailingAnchor }
-    var contentTrailing: NSLayoutXAxisAnchor { statusBadge.leadingAnchor }
-    var contentTop: NSLayoutYAxisAnchor { avatarContainer.topAnchor }
-    var contentBottom: NSLayoutYAxisAnchor { separator.topAnchor }
-    let contentInsetLeading: CGFloat = 12
-    let contentInsetTrailing: CGFloat = -8
 
     // MARK: - Init
 
@@ -85,35 +96,65 @@ class HistoryBaseCell: UICollectionViewCell {
     // MARK: - Base layout
 
     private func setupBase() {
-        avatarContainer.addSubview(avatarLabel)
-        contentView.addSubview(avatarContainer)
-        contentView.addSubview(statusBadge)
-        contentView.addSubview(timeLabel)
+        // contentContainer added first → sits behind header elements in Z-order
+        contentView.addSubview(contentContainer)
         contentView.addSubview(separator)
 
+        // Fixed-width right column that holds badge + timestamp.
+        // Added after content → rendered on top.
+        let rightColumn = UIView()
+        rightColumn.translatesAutoresizingMaskIntoConstraints = false
+        timeLabelPill.addSubview(timeLabel)
+        rightColumn.addSubview(statusBadge)
+        rightColumn.addSubview(timeLabelPill)
+
+        avatarContainer.addSubview(avatarLabel)
+        contentView.addSubview(avatarContainer)
+        contentView.addSubview(rightColumn)
+
         NSLayoutConstraint.activate([
-            // Avatar: 44 × 44, top-leading
+            // Avatar: 44×44, top-left
             avatarContainer.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 14),
             avatarContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16),
             avatarContainer.widthAnchor.constraint(equalToConstant: 44),
             avatarContainer.heightAnchor.constraint(equalToConstant: 44),
-
             avatarLabel.centerXAnchor.constraint(equalTo: avatarContainer.centerXAnchor),
             avatarLabel.centerYAnchor.constraint(equalTo: avatarContainer.centerYAnchor),
 
-            // Badge: top-trailing
-            statusBadge.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 14),
-            statusBadge.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            // Right column: fixed 90pt wide, spans full cell height, pinned to trailing edge
+            rightColumn.topAnchor.constraint(equalTo: contentView.topAnchor),
+            rightColumn.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            rightColumn.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            rightColumn.widthAnchor.constraint(equalToConstant: 90),
 
-            // Time: below badge, trailing-aligned
-            timeLabel.topAnchor.constraint(equalTo: statusBadge.bottomAnchor, constant: 4),
-            timeLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            // Badge: top of right column, trailing-aligned (natural width via intrinsicContentSize)
+            statusBadge.topAnchor.constraint(equalTo: rightColumn.topAnchor, constant: 14),
+            statusBadge.trailingAnchor.constraint(equalTo: rightColumn.trailingAnchor),
 
-            // Separator: hairline at bottom
+            // Timestamp pill: below badge, trailing-aligned
+            timeLabelPill.topAnchor.constraint(equalTo: statusBadge.bottomAnchor, constant: 4),
+            timeLabelPill.trailingAnchor.constraint(equalTo: rightColumn.trailingAnchor),
+
+            // Time label insets inside pill
+            timeLabel.topAnchor.constraint(equalTo: timeLabelPill.topAnchor, constant: 2),
+            timeLabel.bottomAnchor.constraint(equalTo: timeLabelPill.bottomAnchor, constant: -2),
+            timeLabel.leadingAnchor.constraint(equalTo: timeLabelPill.leadingAnchor, constant: 5),
+            timeLabel.trailingAnchor.constraint(equalTo: timeLabelPill.trailingAnchor, constant: -5),
+
+            // Content container: between avatar.trailing and rightColumn.leading
+            contentContainer.topAnchor.constraint(equalTo: avatarContainer.topAnchor),
+            contentContainer.leadingAnchor.constraint(equalTo: avatarContainer.trailingAnchor, constant: 12),
+            contentContainer.trailingAnchor.constraint(equalTo: rightColumn.leadingAnchor, constant: -8),
+            contentContainer.bottomAnchor.constraint(equalTo: separator.topAnchor),
+
+            // Separator: hairline at cell bottom
             separator.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             separator.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             separator.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
             separator.heightAnchor.constraint(equalToConstant: 0.5),
         ])
+
+        // Ensure the cell is always tall enough to show the full avatar.
+        contentView.heightAnchor.constraint(greaterThanOrEqualToConstant: 72).isActive = true
     }
 }

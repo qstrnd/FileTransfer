@@ -2,29 +2,30 @@ import UIKit
 
 final class HistoryMultiImageCell: HistoryBaseCell {
 
-    private static let maxThumbs = 3
+    private static let thumbSize: CGFloat = 120
+    private static let maxThumbs = 10
 
     private var loadTasks: [Task<Void, Never>] = []
     private var currentURLs: [URL] = []
+    private var thumbViews: [UIImageView] = []
 
-    private let thumbStack: UIStackView = {
-        let sv = UIStackView()
-        sv.axis = .horizontal
-        sv.spacing = 4
-        sv.distribution = .fillEqually
+    private let scrollView: UIScrollView = {
+        let sv = UIScrollView()
+        sv.showsHorizontalScrollIndicator = false
+        sv.showsVerticalScrollIndicator = false
+        sv.clipsToBounds = true
         sv.translatesAutoresizingMaskIntoConstraints = false
         return sv
     }()
 
-    private let thumbViews: [UIImageView] = (0..<maxThumbs).map { _ in
-        let iv = UIImageView()
-        iv.contentMode = .scaleAspectFill
-        iv.clipsToBounds = true
-        iv.backgroundColor = .secondarySystemFill
-        iv.layer.cornerRadius = 6
-        iv.translatesAutoresizingMaskIntoConstraints = false
-        return iv
-    }
+    private let thumbsStack: UIStackView = {
+        let sv = UIStackView()
+        sv.axis = .horizontal
+        sv.spacing = 4
+        sv.alignment = .fill
+        sv.translatesAutoresizingMaskIntoConstraints = false
+        return sv
+    }()
 
     private let metaLabel: UILabel = {
         let l = UILabel()
@@ -38,7 +39,6 @@ final class HistoryMultiImageCell: HistoryBaseCell {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        thumbViews.forEach { thumbStack.addArrangedSubview($0) }
         setupContent()
     }
 
@@ -49,64 +49,80 @@ final class HistoryMultiImageCell: HistoryBaseCell {
     func configure(with record: TransferRecord, gate: any HistoryThumbnailGate) {
         super.configure(with: record)
         cancelLoad()
-        thumbViews.forEach { $0.image = nil; $0.isHidden = false }
+        clearThumbs()
 
         let urls = Array(record.attachmentURLs.prefix(Self.maxThumbs))
         currentURLs = urls
-
-        // Hide unused thumb slots
-        for i in urls.count..<Self.maxThumbs {
-            thumbViews[i].isHidden = true
-        }
-
         metaLabel.text = metaText(for: record)
 
-        loadTasks = urls.enumerated().map { idx, url in
-            Task { @MainActor [weak self] in
+        for (idx, url) in urls.enumerated() {
+            let iv = UIImageView()
+            iv.contentMode = .scaleAspectFill
+            iv.clipsToBounds = true
+            iv.backgroundColor = .secondarySystemFill
+            iv.layer.cornerRadius = 6
+            iv.translatesAutoresizingMaskIntoConstraints = false
+            iv.widthAnchor.constraint(equalToConstant: Self.thumbSize).isActive = true
+            thumbsStack.addArrangedSubview(iv)
+            thumbViews.append(iv)
+
+            loadTasks.append(Task { @MainActor [weak self] in
                 guard let data = await gate.thumbnail(for: url),
                       let img = UIImage(data: data) else { return }
                 guard self?.currentURLs.indices.contains(idx) == true,
                       self?.currentURLs[idx] == url else { return }
-                let iv = self?.thumbViews[idx]
-                UIView.transition(with: iv ?? UIView(),
+                let view = self?.thumbViews[idx]
+                UIView.transition(with: view ?? UIView(),
                                   duration: 0.2,
                                   options: .transitionCrossDissolve) {
-                    iv?.image = img
+                    view?.image = img
                 }
-            }
+            })
         }
     }
 
     override func prepareForReuse() {
         super.prepareForReuse()
         cancelLoad()
+        clearThumbs()
         currentURLs = []
-        thumbViews.forEach { $0.image = nil; $0.isHidden = false }
         metaLabel.text = nil
     }
 
     // MARK: - Private
 
     private func setupContent() {
-        contentView.addSubview(thumbStack)
-        contentView.addSubview(metaLabel)
+        scrollView.addSubview(thumbsStack)
+        contentContainer.addSubview(scrollView)
+        contentContainer.addSubview(metaLabel)
 
         NSLayoutConstraint.activate([
-            thumbStack.topAnchor.constraint(equalTo: contentTop, constant: 8),
-            thumbStack.leadingAnchor.constraint(equalTo: contentLeading, constant: contentInsetLeading),
-            thumbStack.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            thumbStack.heightAnchor.constraint(equalTo: thumbStack.widthAnchor, multiplier: 1.0 / 3.0),
+            scrollView.topAnchor.constraint(equalTo: contentContainer.topAnchor, constant: 4),
+            scrollView.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
+            scrollView.heightAnchor.constraint(equalToConstant: Self.thumbSize),
 
-            metaLabel.topAnchor.constraint(equalTo: thumbStack.bottomAnchor, constant: 6),
-            metaLabel.leadingAnchor.constraint(equalTo: thumbStack.leadingAnchor),
-            metaLabel.trailingAnchor.constraint(equalTo: thumbStack.trailingAnchor),
-            metaLabel.bottomAnchor.constraint(equalTo: contentBottom, constant: -12),
+            thumbsStack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
+            thumbsStack.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
+            thumbsStack.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
+            thumbsStack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
+            thumbsStack.heightAnchor.constraint(equalTo: scrollView.frameLayoutGuide.heightAnchor),
+
+            metaLabel.topAnchor.constraint(equalTo: scrollView.bottomAnchor, constant: 6),
+            metaLabel.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
+            metaLabel.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
+            metaLabel.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor, constant: -10),
         ])
     }
 
     private func cancelLoad() {
         loadTasks.forEach { $0.cancel() }
         loadTasks = []
+    }
+
+    private func clearThumbs() {
+        thumbsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        thumbViews = []
     }
 
     private func metaText(for record: TransferRecord) -> String {

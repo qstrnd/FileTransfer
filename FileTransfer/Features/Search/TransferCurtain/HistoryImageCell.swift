@@ -72,19 +72,19 @@ final class HistoryImageCell: HistoryBaseCell {
     // MARK: - Private
 
     private func setupContent() {
-        contentView.addSubview(thumbnailView)
-        contentView.addSubview(metaLabel)
+        contentContainer.addSubview(thumbnailView)
+        contentContainer.addSubview(metaLabel)
 
         NSLayoutConstraint.activate([
-            thumbnailView.topAnchor.constraint(equalTo: contentTop, constant: 8),
-            thumbnailView.leadingAnchor.constraint(equalTo: contentLeading, constant: contentInsetLeading),
-            thumbnailView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            thumbnailView.heightAnchor.constraint(equalTo: thumbnailView.widthAnchor, multiplier: 9.0 / 16.0),
+            thumbnailView.topAnchor.constraint(equalTo: contentContainer.topAnchor, constant: 4),
+            thumbnailView.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
+            thumbnailView.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
+            thumbnailView.heightAnchor.constraint(equalToConstant: 160),
 
             metaLabel.topAnchor.constraint(equalTo: thumbnailView.bottomAnchor, constant: 6),
-            metaLabel.leadingAnchor.constraint(equalTo: thumbnailView.leadingAnchor),
-            metaLabel.trailingAnchor.constraint(equalTo: thumbnailView.trailingAnchor),
-            metaLabel.bottomAnchor.constraint(equalTo: contentBottom, constant: -12),
+            metaLabel.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
+            metaLabel.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
+            metaLabel.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor, constant: -10),
         ])
     }
 

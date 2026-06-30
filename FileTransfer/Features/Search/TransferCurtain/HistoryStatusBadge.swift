@@ -6,6 +6,12 @@ final class HistoryStatusBadge: UIView {
 
     private let iconView = UIImageView()
     private let textLabel = UILabel()
+    private var contentStack: UIStackView!
+
+    override var intrinsicContentSize: CGSize {
+        let s = contentStack.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize)
+        return CGSize(width: s.width + 18, height: s.height + 10)
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -26,6 +32,7 @@ final class HistoryStatusBadge: UIView {
         iconView.tintColor = tint
         textLabel.text = received ? "Received" : "Sent"
         textLabel.textColor = tint
+        invalidateIntrinsicContentSize()
     }
 
     private func setup() {
@@ -44,9 +51,7 @@ final class HistoryStatusBadge: UIView {
         stack.alignment = .center
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
-
-        setContentHuggingPriority(.required, for: .horizontal)
-        setContentCompressionResistancePriority(.required, for: .horizontal)
+        contentStack = stack
 
         NSLayoutConstraint.activate([
             iconView.widthAnchor.constraint(equalToConstant: 13),
