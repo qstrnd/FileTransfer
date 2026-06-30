@@ -2,10 +2,10 @@ import UIKit
 
 final class HistoryTextCell: HistoryBaseCell {
 
-    /// Called when the cell expands/collapses so the layout can be invalidated.
     var onSizeChange: (() -> Void)?
 
     private var isExpanded = false
+    private var lastHiddenState = true
 
     private let bodyLabel: UILabel = {
         let l = UILabel()
@@ -34,6 +34,29 @@ final class HistoryTextCell: HistoryBaseCell {
         return b
     }()
 
+    // UIStackView collapses hidden arranged subviews including their spacing.
+    private let bodyStack: UIStackView = {
+        let sv = UIStackView()
+        sv.axis = .vertical
+        sv.spacing = 2
+        sv.alignment = .leading
+        sv.translatesAutoresizingMaskIntoConstraints = false
+        return sv
+    }()
+
+    // MARK: - Self-sizing
+
+    override func preferredLayoutAttributesFitting(
+        _ layoutAttributes: UICollectionViewLayoutAttributes
+    ) -> UICollectionViewLayoutAttributes {
+        // Force a full layout pass so bodyLabel.bounds.width is known before
+        // the collection view queries our preferred size. This lets layoutSubviews
+        // correctly show/hide moreButton, which affects the returned height.
+        setNeedsLayout()
+        layoutIfNeeded()
+        return super.preferredLayoutAttributesFitting(layoutAttributes)
+    }
+
     // MARK: - Init
 
     override init(frame: CGRect) {
@@ -50,7 +73,21 @@ final class HistoryTextCell: HistoryBaseCell {
         bodyLabel.text = record.detail
         isExpanded = false
         bodyLabel.numberOfLines = 2
-        updateMoreButton()
+        // Hide until layoutSubviews confirms overflow; stack collapses the button space.
+        moreButton.isHidden = true
+        lastHiddenState = true
+        updateMoreButtonTitle()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard !isExpanded, bodyLabel.bounds.width > 0 else { return }
+        let shouldHide = !textOverflows(bodyLabel.text ?? "", width: bodyLabel.bounds.width)
+        guard shouldHide != lastHiddenState else { return }
+        lastHiddenState = shouldHide
+        moreButton.isHidden = shouldHide
+        // Stack height changed — tell the layout to re-query cell size.
+        onSizeChange?()
     }
 
     override func prepareForReuse() {
@@ -58,37 +95,59 @@ final class HistoryTextCell: HistoryBaseCell {
         bodyLabel.text = nil
         isExpanded = false
         bodyLabel.numberOfLines = 2
+        moreButton.isHidden = true
+        lastHiddenState = true
         onSizeChange = nil
-        moreButton.isHidden = false
     }
 
     // MARK: - Private
 
     private func setupContent() {
-        contentView.addSubview(bodyLabel)
-        contentView.addSubview(moreButton)
+        bodyStack.addArrangedSubview(bodyLabel)
+        bodyStack.addArrangedSubview(moreButton)
+        contentView.addSubview(bodyStack)
 
         NSLayoutConstraint.activate([
-            bodyLabel.topAnchor.constraint(equalTo: contentTop, constant: 0),
-            bodyLabel.leadingAnchor.constraint(equalTo: contentLeading, constant: contentInsetLeading),
-            bodyLabel.trailingAnchor.constraint(equalTo: contentTrailing, constant: contentInsetTrailing),
+            bodyStack.topAnchor.constraint(equalTo: contentTop, constant: 4),
+            bodyStack.leadingAnchor.constraint(equalTo: contentLeading, constant: contentInsetLeading),
+            bodyStack.trailingAnchor.constraint(equalTo: contentTrailing, constant: contentInsetTrailing),
+            bodyStack.bottomAnchor.constraint(equalTo: contentBottom, constant: -12),
 
-            moreButton.topAnchor.constraint(equalTo: bodyLabel.bottomAnchor, constant: 2),
-            moreButton.leadingAnchor.constraint(equalTo: bodyLabel.leadingAnchor),
-            moreButton.bottomAnchor.constraint(equalTo: contentBottom, constant: -12),
+            // bodyLabel fills the stack width; moreButton only as wide as its title.
+            bodyLabel.widthAnchor.constraint(equalTo: bodyStack.widthAnchor),
         ])
     }
 
     private func toggle() {
         isExpanded.toggle()
         bodyLabel.numberOfLines = isExpanded ? 0 : 2
-        updateMoreButton()
+        if !isExpanded {
+            // After collapsing, re-evaluate overflow to decide if button stays visible.
+            moreButton.isHidden = !textOverflows(bodyLabel.text ?? "", width: bodyLabel.bounds.width)
+            lastHiddenState = moreButton.isHidden
+        }
+        updateMoreButtonTitle()
         onSizeChange?()
     }
 
-    private func updateMoreButton() {
+    private func updateMoreButtonTitle() {
         var config = moreButton.configuration
         config?.title = isExpanded ? "less" : "more"
         moreButton.configuration = config
+    }
+
+    /// True when `text` needs more than 2 lines at `width`.
+    private func textOverflows(_ text: String, width: CGFloat) -> Bool {
+        guard !text.isEmpty else { return false }
+        let font = bodyLabel.font ?? .systemFont(ofSize: 15)
+        let attrs: [NSAttributedString.Key: Any] = [.font: font]
+        let twoLineH = font.lineHeight * 2 + font.leading + 2
+        let fullH = (text as NSString).boundingRect(
+            with: CGSize(width: width, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: attrs,
+            context: nil
+        ).height
+        return fullH > twoLineH
     }
 }
