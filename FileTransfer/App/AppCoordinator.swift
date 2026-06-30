@@ -13,6 +13,7 @@ final class AppCoordinator {
     private let connectionHistory: any ConnectionHistoryStore
     private let profileStore: any UserProfileStore
     private let historyStore: TransferHistoryStore
+    private let attachmentCache: any AttachmentCacheGate = TransferAttachmentCache()
 
     /// The most recently saved profile, used to pre-fill the onboarding screen
     /// when the user navigates back from the search screen.
@@ -75,6 +76,7 @@ final class AppCoordinator {
             service: service,
             connectionHistory: connectionHistory,
             historyStore: historyStore,
+            attachmentCache: attachmentCache,
             onBack: { [weak self] in self?.backToOnboarding() }
         )
     }

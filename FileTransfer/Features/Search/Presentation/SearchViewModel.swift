@@ -51,6 +51,7 @@ final class SearchViewModel {
     private let service: any NearbySessionService
     private let connectionHistory: any ConnectionHistoryStore
     private let historyStore: TransferHistoryStore
+    private let attachmentCache: any AttachmentCacheGate
     private let onBack: () -> Void
     let mediaSavingGate: any MediaSavingGate
     let thumbnailGate: any ThumbnailGate
@@ -89,6 +90,7 @@ final class SearchViewModel {
         service: any NearbySessionService,
         connectionHistory: any ConnectionHistoryStore,
         historyStore: TransferHistoryStore,
+        attachmentCache: any AttachmentCacheGate = TransferAttachmentCache(),
         mediaSavingGate: any MediaSavingGate = MediaSaveService(),
         thumbnailGate: any ThumbnailGate = MediaThumbnailService(),
         onBack: @escaping () -> Void
@@ -99,12 +101,17 @@ final class SearchViewModel {
         self.service = service
         self.connectionHistory = connectionHistory
         self.historyStore = historyStore
+        self.attachmentCache = attachmentCache
         self.mediaSavingGate = mediaSavingGate
         self.thumbnailGate = thumbnailGate
         self.onBack = onBack
-        self.sendMediaUseCase = SendMediaUseCase(session: service, history: historyStore)
+        self.sendMediaUseCase = SendMediaUseCase(
+            session: service, history: historyStore, attachmentCache: attachmentCache
+        )
         self.sendContactUseCase = SendContactUseCase(session: service, history: historyStore)
-        self.sendFileUseCase = SendFileUseCase(session: service, history: historyStore)
+        self.sendFileUseCase = SendFileUseCase(
+            session: service, history: historyStore, attachmentCache: attachmentCache
+        )
         sessionAdapter.events = self
     }
 
@@ -268,6 +275,11 @@ final class SearchViewModel {
 
     private func addRecord(_ record: TransferRecord) {
         historyStore.add(record)
+    }
+
+    func deleteHistoryRecord(_ id: UUID) {
+        historyStore.delete(id)
+        attachmentCache.delete(recordID: id)
     }
 
     // MARK: - Keepalive
@@ -619,19 +631,30 @@ extension SearchViewModel: PeerSessionEvents {
         let senderName = transfer.senderName
         let items = transfer.buildItems(transferID: transferID)
         let (emoji, name) = Peer.parseDisplayName(peer.displayName)
-        addRecord(TransferRecord(
-            peerEmoji: emoji,
-            peerName: name,
-            direction: .received,
-            type: .photo,
-            detail: "\(transfer.totalCount) item\(transfer.totalCount == 1 ? "" : "s")"
-        ))
-        Task {
-            // Keep the receiving toast visible for a moment so the user sees
-            // the transfer complete before the received-media alert appears.
+        let detail = items.count == 1
+            ? (items[0].fileName ?? "1 photo")
+            : "\(items.count) photos"
+        let recordID = UUID()
+        let srcURLs = items.map(\.fileURL)
+        let totalBytes = attachmentCache.fileBytes(for: srcURLs)
+
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            // Cache runs concurrently with the toast delay.
+            async let cachedURLs = attachmentCache.cache(srcURLs, forRecord: recordID)
             try? await Task.sleep(for: .seconds(1.2))
             receivingMediaTransfer = nil
             receivedMedia = ReceivedMediaTransfer(senderName: senderName, items: items)
+            addRecord(TransferRecord(
+                id: recordID,
+                peerEmoji: emoji,
+                peerName: name,
+                direction: .received,
+                type: .photo,
+                detail: detail,
+                attachmentURLs: await cachedURLs,
+                fileBytes: totalBytes > 0 ? totalBytes : nil
+            ))
         }
     }
 
@@ -661,14 +684,26 @@ extension SearchViewModel: PeerSessionEvents {
         let files = transfer.orderedFiles
         let (emoji, peerName) = Peer.parseDisplayName(peer.displayName)
         let detail = files.count == 1 ? files[0].name : "\(files.count) files"
-        addRecord(TransferRecord(
-            peerEmoji: emoji, peerName: peerName,
-            direction: .received, type: .file, detail: detail
-        ))
-        Task {
+        let recordID = UUID()
+        let srcURLs = files.map(\.url)
+        let totalBytes = attachmentCache.fileBytes(for: srcURLs)
+
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            async let cachedURLs = attachmentCache.cache(srcURLs, forRecord: recordID)
             try? await Task.sleep(for: .seconds(1.2))
             receivingFileTransfer = nil
             receivedFiles = ReceivedFileTransfer(senderName: senderName, files: files)
+            addRecord(TransferRecord(
+                id: recordID,
+                peerEmoji: emoji,
+                peerName: peerName,
+                direction: .received,
+                type: .file,
+                detail: detail,
+                attachmentURLs: await cachedURLs,
+                fileBytes: totalBytes > 0 ? totalBytes : nil
+            ))
         }
     }
 }

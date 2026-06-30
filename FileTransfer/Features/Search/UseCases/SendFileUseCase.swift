@@ -9,12 +9,18 @@ final class SendFileUseCase {
 
     private let session: any NearbySessionService
     private let history: any TransferHistoryGate
+    private let attachmentCache: any AttachmentCacheGate
     private var progressPollingTask: Task<Void, Never>?
     private var activeProgresses: [Progress] = []
 
-    init(session: any NearbySessionService, history: any TransferHistoryGate) {
+    init(
+        session: any NearbySessionService,
+        history: any TransferHistoryGate,
+        attachmentCache: any AttachmentCacheGate
+    ) {
         self.session = session
         self.history = history
+        self.attachmentCache = attachmentCache
     }
 
     func send(_ urls: [URL], to peers: [Peer]) {
@@ -27,7 +33,12 @@ final class SendFileUseCase {
         activeProgresses = []
         startProgressPolling()
 
+        let srcURLs = urls
+        let totalBytes = attachmentCache.fileBytes(for: srcURLs)
+        let detail = total == 1 ? urls[0].lastPathComponent : "\(total) files"
+
         for peer in peers {
+            let recordID = UUID()
             let progresses = session.sendFiles(files, to: peer) { [weak self] in
                 self?.outgoingTransfer?.recordCompletion()
                 if self?.outgoingTransfer?.isComplete == true {
@@ -38,14 +49,21 @@ final class SendFileUseCase {
                 }
             }
             activeProgresses.append(contentsOf: progresses)
-            let detail = total == 1 ? urls[0].lastPathComponent : "\(total) files"
-            history.add(TransferRecord(
-                peerEmoji: peer.emojiComponent,
-                peerName: peer.nameComponent,
-                direction: .sent,
-                type: .file,
-                detail: detail
-            ))
+
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let cachedURLs = await attachmentCache.cache(srcURLs, forRecord: recordID)
+                history.add(TransferRecord(
+                    id: recordID,
+                    peerEmoji: peer.emojiComponent,
+                    peerName: peer.nameComponent,
+                    direction: .sent,
+                    type: .file,
+                    detail: detail,
+                    attachmentURLs: cachedURLs,
+                    fileBytes: totalBytes > 0 ? totalBytes : nil
+                ))
+            }
         }
     }
 

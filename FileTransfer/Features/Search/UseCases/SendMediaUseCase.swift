@@ -3,7 +3,7 @@ import Observation
 
 /// Orchestrates an outgoing media transfer: flattens MediaItems (including Live Photo
 /// pairs) into a file list, sends to every connected peer, tracks per-file completions,
-/// and auto-clears the transfer state after a brief success window.
+/// caches attachment copies for history, and auto-clears state after a success window.
 @Observable
 @MainActor
 final class SendMediaUseCase {
@@ -12,12 +12,18 @@ final class SendMediaUseCase {
 
     private let session: any NearbySessionService
     private let history: any TransferHistoryGate
+    private let attachmentCache: any AttachmentCacheGate
     private var progressPollingTask: Task<Void, Never>?
     private var activeProgresses: [Progress] = []
 
-    init(session: any NearbySessionService, history: any TransferHistoryGate) {
+    init(
+        session: any NearbySessionService,
+        history: any TransferHistoryGate,
+        attachmentCache: any AttachmentCacheGate
+    ) {
         self.session = session
         self.history = history
+        self.attachmentCache = attachmentCache
     }
 
     // MARK: - Intent
@@ -29,7 +35,6 @@ final class SendMediaUseCase {
         var files: [MediaFileToSend] = []
         for (idx, item) in items.enumerated() {
             if let lpVideoURL = item.livePhotoVideoURL {
-                // Live Photo: send the still first, then the companion video.
                 files.append(MediaFileToSend(
                     url: item.fileURL, logicalIndex: idx, logicalTotal: logicalTotal,
                     kind: .livePhotoStill, suggestedName: item.fileName
@@ -46,12 +51,19 @@ final class SendMediaUseCase {
             }
         }
 
-        // OutgoingMediaTransfer counts actual files (including LP companions).
         outgoingTransfer = OutgoingMediaTransfer(totalItems: files.count, peerCount: peers.count)
         activeProgresses = []
         startProgressPolling()
 
+        // Compute size from source URLs before they might be moved/cleaned up.
+        let srcURLs = items.map(\.fileURL)
+        let totalBytes = attachmentCache.fileBytes(for: srcURLs)
+        let detail = items.count == 1
+            ? (items[0].fileName ?? "1 photo")
+            : "\(items.count) photos"
+
         for peer in peers {
+            let recordID = UUID()
             let progresses = session.sendMedia(files, to: peer) { [weak self] in
                 self?.outgoingTransfer?.recordCompletion()
                 if self?.outgoingTransfer?.isComplete == true {
@@ -62,18 +74,24 @@ final class SendMediaUseCase {
                 }
             }
             activeProgresses.append(contentsOf: progresses)
-            history.add(TransferRecord(
-                peerEmoji: peer.emojiComponent,
-                peerName: peer.nameComponent,
-                direction: .sent,
-                type: .photo,
-                detail: "\(items.count) item\(items.count == 1 ? "" : "s")"
-            ))
+
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let cachedURLs = await attachmentCache.cache(srcURLs, forRecord: recordID)
+                history.add(TransferRecord(
+                    id: recordID,
+                    peerEmoji: peer.emojiComponent,
+                    peerName: peer.nameComponent,
+                    direction: .sent,
+                    type: .photo,
+                    detail: detail,
+                    attachmentURLs: cachedURLs,
+                    fileBytes: totalBytes > 0 ? totalBytes : nil
+                ))
+            }
         }
     }
 
-    /// Clears the outgoing transfer state. The caller is responsible for
-    /// disconnecting peers if the transfer was aborted mid-flight.
     func abort() {
         progressPollingTask?.cancel()
         progressPollingTask = nil

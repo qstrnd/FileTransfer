@@ -17,6 +17,16 @@ final class TransferHistoryStore: TransferHistoryGate {
         records.insert(record, at: 0)
     }
 
+    func delete(_ id: UUID) {
+        records.removeAll { $0.id == id }
+        let descriptor = FetchDescriptor<TransferItem>()
+        if let items = try? context.fetch(descriptor),
+           let item = items.first(where: { $0.id == id }) {
+            context.delete(item)
+            try? context.save()
+        }
+    }
+
     private func loadAll() {
         let descriptor = FetchDescriptor<TransferItem>(
             sortBy: [SortDescriptor(\.date, order: .reverse)]
