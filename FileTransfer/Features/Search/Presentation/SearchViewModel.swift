@@ -55,6 +55,7 @@ final class SearchViewModel {
     private let onBack: () -> Void
     let mediaSavingGate: any MediaSavingGate
     let thumbnailGate: any ThumbnailGate
+    let historyThumbnailGate: any HistoryThumbnailGate
     private let contactShareService = ContactShareService()
     private let sessionAdapter = PeerSessionAdapter()
     private let sendMediaUseCase: SendMediaUseCase
@@ -93,6 +94,7 @@ final class SearchViewModel {
         attachmentCache: any AttachmentCacheGate = TransferAttachmentCache(),
         mediaSavingGate: any MediaSavingGate = MediaSaveService(),
         thumbnailGate: any ThumbnailGate = MediaThumbnailService(),
+        historyThumbnailGate: any HistoryThumbnailGate = HistoryThumbnailService(),
         onBack: @escaping () -> Void
     ) {
         self.emoji = emoji
@@ -104,6 +106,7 @@ final class SearchViewModel {
         self.attachmentCache = attachmentCache
         self.mediaSavingGate = mediaSavingGate
         self.thumbnailGate = thumbnailGate
+        self.historyThumbnailGate = historyThumbnailGate
         self.onBack = onBack
         self.sendMediaUseCase = SendMediaUseCase(
             session: service, history: historyStore, attachmentCache: attachmentCache
