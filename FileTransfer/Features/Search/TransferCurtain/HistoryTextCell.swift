@@ -6,6 +6,7 @@ final class HistoryTextCell: HistoryBaseCell {
 
     private var isExpanded = false
     private var lastHiddenState = true
+    private var isSizingPass = false
 
     private let bodyLabel: UILabel = {
         let l = UILabel()
@@ -49,9 +50,12 @@ final class HistoryTextCell: HistoryBaseCell {
     override func preferredLayoutAttributesFitting(
         _ layoutAttributes: UICollectionViewLayoutAttributes
     ) -> UICollectionViewLayoutAttributes {
-        // Force a full layout pass so bodyLabel.bounds.width is known before
-        // the collection view queries our preferred size. This lets layoutSubviews
-        // correctly show/hide moreButton, which affects the returned height.
+        // Force a full layout pass so bodyLabel.bounds.width is known before the
+        // collection view queries our preferred size. isSizingPass suppresses the
+        // onSizeChange → performBatchUpdates call that would fire from layoutSubviews
+        // here, which would crash because the cell hasn't been returned yet.
+        isSizingPass = true
+        defer { isSizingPass = false }
         setNeedsLayout()
         layoutIfNeeded()
         return super.preferredLayoutAttributesFitting(layoutAttributes)
@@ -86,7 +90,10 @@ final class HistoryTextCell: HistoryBaseCell {
         guard shouldHide != lastHiddenState else { return }
         lastHiddenState = shouldHide
         moreButton.isHidden = shouldHide
-        // Stack height changed — tell the layout to re-query cell size.
+        // During preferredLayoutAttributesFitting the correct size is already
+        // being computed; calling performBatchUpdates before the cell is returned
+        // to the collection view would crash.
+        guard !isSizingPass else { return }
         onSizeChange?()
     }
 
