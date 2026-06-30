@@ -6,7 +6,7 @@ extension TransferCurtainViewController {
     // MARK: - Cell type dispatch
 
     enum HistoryCellType {
-        case text, singleImage, multiImage, document
+        case text, singleMedia, multiMedia, document
     }
 
     func cellType(for record: TransferRecord) -> HistoryCellType {
@@ -16,8 +16,8 @@ extension TransferCurtainViewController {
         case .photo:
             switch record.attachmentURLs.count {
             case 0:    return .text
-            case 1:    return .singleImage
-            default:   return .multiImage
+            case 1:    return .singleMedia
+            default:   return .multiMedia
             }
         case .file:
             return .document
@@ -36,14 +36,22 @@ extension TransferCurtainViewController {
             }
         }
 
-        let imageReg = UICollectionView.CellRegistration<HistoryImageCell, UUID> { [weak self] cell, _, id in
+        let imageReg = UICollectionView.CellRegistration<HistoryMediaCell, UUID> { [weak self] cell, _, id in
             guard let self, let record = recordsByID[id] else { return }
             cell.configure(with: record, gate: thumbnailGate ?? HistoryThumbnailService())
         }
 
-        let multiReg = UICollectionView.CellRegistration<HistoryMultiImageCell, UUID> { [weak self] cell, _, id in
+        let multiReg = UICollectionView.CellRegistration<HistoryMultiMediaCell, UUID> { [weak self] cell, _, id in
             guard let self, let record = recordsByID[id] else { return }
             cell.configure(with: record, gate: thumbnailGate ?? HistoryThumbnailService())
+            cell.onThumbnailTap = { [weak self] index in
+                guard let self else { return }
+                currentPreviewURLs = record.attachmentURLs
+                let ql = QLPreviewController()
+                ql.dataSource = self
+                ql.currentPreviewItemIndex = index
+                present(ql, animated: true)
+            }
         }
 
         let docReg = UICollectionView.CellRegistration<HistoryDocumentCell, UUID> { [weak self] cell, _, id in
@@ -66,9 +74,9 @@ extension TransferCurtainViewController {
             switch cellType(for: record) {
             case .text:
                 return cv.dequeueConfiguredReusableCell(using: textReg, for: indexPath, item: id)
-            case .singleImage:
+            case .singleMedia:
                 return cv.dequeueConfiguredReusableCell(using: imageReg, for: indexPath, item: id)
-            case .multiImage:
+            case .multiMedia:
                 return cv.dequeueConfiguredReusableCell(using: multiReg, for: indexPath, item: id)
             case .document:
                 return cv.dequeueConfiguredReusableCell(using: docReg, for: indexPath, item: id)

@@ -151,7 +151,7 @@ private func records() -> [TransferRecord] {
 
 private final class HistoryListPreviewController: UIViewController {
 
-    private enum CellKind { case text, singleImage, multiImage, document }
+    private enum CellKind { case text, singleMedia, multiMedia, document }
 
     private lazy var collectionView = UICollectionView(
         frame: .zero,
@@ -196,8 +196,8 @@ private final class HistoryListPreviewController: UIViewController {
         case .photo:
             switch record.attachmentURLs.count {
             case 0:    return .text
-            case 1:    return .singleImage
-            default:   return .multiImage
+            case 1:    return .singleMedia
+            default:   return .multiMedia
             }
         case .file: return .document
         }
@@ -211,11 +211,11 @@ private final class HistoryListPreviewController: UIViewController {
                 UIView.animate(withDuration: 0.3) { cv?.performBatchUpdates(nil) }
             }
         }
-        let imageReg = UICollectionView.CellRegistration<HistoryImageCell, UUID> { [weak self] cell, _, id in
+        let imageReg = UICollectionView.CellRegistration<HistoryMediaCell, UUID> { [weak self] cell, _, id in
             guard let self, let record = byID[id] else { return }
             cell.configure(with: record, gate: gate)
         }
-        let multiReg = UICollectionView.CellRegistration<HistoryMultiImageCell, UUID> { [weak self] cell, _, id in
+        let multiReg = UICollectionView.CellRegistration<HistoryMultiMediaCell, UUID> { [weak self] cell, _, id in
             guard let self, let record = byID[id] else { return }
             cell.configure(with: record, gate: gate)
         }
@@ -237,9 +237,9 @@ private final class HistoryListPreviewController: UIViewController {
             switch cellKind(for: record) {
             case .text:
                 return cv.dequeueConfiguredReusableCell(using: textReg, for: indexPath, item: id)
-            case .singleImage:
+            case .singleMedia:
                 return cv.dequeueConfiguredReusableCell(using: imageReg, for: indexPath, item: id)
-            case .multiImage:
+            case .multiMedia:
                 return cv.dequeueConfiguredReusableCell(using: multiReg, for: indexPath, item: id)
             case .document:
                 return cv.dequeueConfiguredReusableCell(using: docReg, for: indexPath, item: id)
