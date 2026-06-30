@@ -37,5 +37,7 @@ struct TransferCurtainView: UIViewControllerRepresentable {
         uiViewController.onShareFile     = onShareFile
         uiViewController.onShareContact  = onShareContact
         uiViewController.onClearSelection = { viewModel.disconnectAll() }
+        uiViewController.thumbnailGate   = viewModel.historyThumbnailGate
+        uiViewController.onDeleteRecord  = { viewModel.deleteHistoryRecord($0) }
     }
 }

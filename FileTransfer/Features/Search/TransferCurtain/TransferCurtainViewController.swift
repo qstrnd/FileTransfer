@@ -74,7 +74,11 @@ final class TransferCurtainViewController: UIViewController {
         collectionViewLayout: makeHistoryLayout()
     )
 
-    var dataSource: UICollectionViewDiffableDataSource<Int, UUID>!
+    var dataSource: UICollectionViewDiffableDataSource<String, UUID>?
+
+    var thumbnailGate: (any HistoryThumbnailGate)?
+    var onDeleteRecord: ((UUID) -> Void)?
+    var currentPreviewURLs: [URL] = []
 
     // MARK: - Pan gesture state
 
