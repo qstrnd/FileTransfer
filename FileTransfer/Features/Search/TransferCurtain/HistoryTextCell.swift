@@ -65,6 +65,8 @@ final class HistoryTextCell: HistoryBaseCell {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
+        // Clip so text doesn't bleed outside the animating cell frame during expand/collapse.
+        contentView.clipsToBounds = true
         setupContent()
     }
 
@@ -126,13 +128,18 @@ final class HistoryTextCell: HistoryBaseCell {
 
     private func toggle() {
         isExpanded.toggle()
-        bodyLabel.numberOfLines = isExpanded ? 0 : 2
-        if !isExpanded {
-            // After collapsing, re-evaluate overflow to decide if button stays visible.
-            moreButton.isHidden = !textOverflows(bodyLabel.text ?? "", width: bodyLabel.bounds.width)
-            lastHiddenState = moreButton.isHidden
+        let expanding = isExpanded
+        // Apply state changes without animation so they don't get swept into
+        // any ambient UIView.animate context. Only the cell height (via
+        // performBatchUpdates in onSizeChange) should animate.
+        UIView.performWithoutAnimation {
+            bodyLabel.numberOfLines = expanding ? 0 : 2
+            if !expanding {
+                moreButton.isHidden = !textOverflows(bodyLabel.text ?? "", width: bodyLabel.bounds.width)
+                lastHiddenState = moreButton.isHidden
+            }
+            updateMoreButtonTitle()
         }
-        updateMoreButtonTitle()
         onSizeChange?()
     }
 
