@@ -1,5 +1,15 @@
 import UIKit
 
+private final class PaddedLabel: UILabel {
+    private let hInset: CGFloat = 6
+    override func drawText(in rect: CGRect) {
+        super.drawText(in: rect.inset(by: UIEdgeInsets(top: 0, left: hInset, bottom: 0, right: hInset)))
+    }
+    override var intrinsicContentSize: CGSize {
+        var s = super.intrinsicContentSize; s.width += hInset * 2; return s
+    }
+}
+
 final class HistoryDocumentCell: HistoryBaseCell {
 
     private var loadTask: Task<Void, Never>?
@@ -25,8 +35,8 @@ final class HistoryDocumentCell: HistoryBaseCell {
         return iv
     }()
 
-    private let typeBadge: UILabel = {
-        let l = UILabel()
+    private let typeBadge: PaddedLabel = {
+        let l = PaddedLabel()
         l.font = .systemFont(ofSize: 11, weight: .bold)
         l.textColor = .white
         l.textAlignment = .center
@@ -126,7 +136,7 @@ final class HistoryDocumentCell: HistoryBaseCell {
     private func configureTypeBadge(for url: URL?) {
         let ext = (url?.pathExtension ?? "").uppercased()
         let label = ext.isEmpty ? "FILE" : ext
-        typeBadge.text = "  \(label)  "
+        typeBadge.text = label
         typeBadge.backgroundColor = badgeColor(for: ext)
     }
 
