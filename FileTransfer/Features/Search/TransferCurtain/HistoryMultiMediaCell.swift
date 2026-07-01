@@ -17,6 +17,10 @@ final class HistoryMultiMediaCell: HistoryBaseCell {
         sv.showsHorizontalScrollIndicator = false
         sv.showsVerticalScrollIndicator = false
         sv.clipsToBounds = true
+        sv.alwaysBounceHorizontal = true
+        // left:  16 (cell leading) + 44 (avatar) + 12 (gap)  = 72 pt — rest starts after peer bubble
+        // right: 16 (cell trailing) + 90 (badge/time column)  = 106 pt — rest ends before right labels
+        sv.contentInset = UIEdgeInsets(top: 0, left: 72, bottom: 0, right: 106)
         sv.translatesAutoresizingMaskIntoConstraints = false
         return sv
     }()
@@ -112,13 +116,16 @@ final class HistoryMultiMediaCell: HistoryBaseCell {
 
     private func setupContent() {
         scrollView.addSubview(thumbsStack)
-        contentContainer.addSubview(scrollView)
+        // Add scrollView to contentView (not contentContainer) so thumbnails can extend to the
+        // right edge of the cell, behind the badge/time pill which float above in Z-order.
+        contentView.insertSubview(scrollView, belowSubview: avatarContainer)
         contentContainer.addSubview(metaLabel)
 
         NSLayoutConstraint.activate([
+            // Span full cell width; contentInset.left keeps the rest position after the peer bubble.
             scrollView.topAnchor.constraint(equalTo: contentContainer.topAnchor, constant: 4),
-            scrollView.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
+            scrollView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             scrollView.heightAnchor.constraint(equalToConstant: Self.thumbSize),
 
             thumbsStack.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
