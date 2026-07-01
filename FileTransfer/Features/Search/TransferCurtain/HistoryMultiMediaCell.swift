@@ -1,5 +1,27 @@
 import UIKit
 
+// Horizontal gradient that fades from systemBackground (opaque) on one edge to clear.
+private final class EdgeGradientView: UIView {
+    override class var layerClass: AnyClass { CAGradientLayer.self }
+    private var gradientLayer: CAGradientLayer { layer as! CAGradientLayer }
+
+    init(isLeading: Bool) {
+        super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = false
+        isUserInteractionEnabled = false
+        gradientLayer.startPoint = isLeading ? CGPoint(x: 0, y: 0.5) : CGPoint(x: 1, y: 0.5)
+        gradientLayer.endPoint   = isLeading ? CGPoint(x: 1, y: 0.5) : CGPoint(x: 0, y: 0.5)
+        gradientLayer.locations  = [0, 1]
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func updateColors(for tc: UITraitCollection) {
+        let bg = UIColor.systemBackground.resolvedColor(with: tc)
+        gradientLayer.colors = [bg.cgColor, bg.withAlphaComponent(0).cgColor]
+    }
+}
+
 final class HistoryMultiMediaCell: HistoryBaseCell {
 
     private static let thumbSize: CGFloat = 120
@@ -7,6 +29,11 @@ final class HistoryMultiMediaCell: HistoryBaseCell {
 
     /// Called when the user taps a thumbnail. The argument is the index within `record.attachmentURLs`.
     var onThumbnailTap: ((Int) -> Void)?
+
+    private static let edgeGradientWidth: CGFloat = 32
+
+    private let leftGradient  = EdgeGradientView(isLeading: true)
+    private let rightGradient = EdgeGradientView(isLeading: false)
 
     private var loadTasks: [Task<Void, Never>] = []
     private var currentURLs: [URL] = []
@@ -116,11 +143,13 @@ final class HistoryMultiMediaCell: HistoryBaseCell {
 
     private func setupContent() {
         scrollView.addSubview(thumbsStack)
-        // Add scrollView to contentView (not contentContainer) so thumbnails can extend to the
-        // right edge of the cell, behind the badge/time pill which float above in Z-order.
+        // scrollView sits below avatar/badge in Z-order; gradients go directly above it.
         contentView.insertSubview(scrollView, belowSubview: avatarContainer)
+        contentView.insertSubview(leftGradient,  aboveSubview: scrollView)
+        contentView.insertSubview(rightGradient, aboveSubview: leftGradient)
         contentContainer.addSubview(metaLabel)
 
+        let gw = Self.edgeGradientWidth
         NSLayoutConstraint.activate([
             // Span full cell width; contentInset.left keeps the rest position after the peer bubble.
             scrollView.topAnchor.constraint(equalTo: contentContainer.topAnchor, constant: 4),
@@ -134,11 +163,32 @@ final class HistoryMultiMediaCell: HistoryBaseCell {
             thumbsStack.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
             thumbsStack.heightAnchor.constraint(equalTo: scrollView.frameLayoutGuide.heightAnchor),
 
+            // Left gradient: opaque at the cell's leading edge, fading right.
+            leftGradient.topAnchor.constraint(equalTo: scrollView.topAnchor),
+            leftGradient.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+            leftGradient.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            leftGradient.widthAnchor.constraint(equalToConstant: gw),
+
+            // Right gradient: opaque at the cell's trailing edge, fading left.
+            rightGradient.topAnchor.constraint(equalTo: scrollView.topAnchor),
+            rightGradient.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+            rightGradient.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            rightGradient.widthAnchor.constraint(equalToConstant: gw),
+
             metaLabel.topAnchor.constraint(equalTo: scrollView.bottomAnchor, constant: 6),
             metaLabel.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
             metaLabel.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
             metaLabel.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor, constant: -10),
         ])
+
+        // Apply gradient colors now and whenever the color scheme changes.
+        leftGradient.updateColors(for: traitCollection)
+        rightGradient.updateColors(for: traitCollection)
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { [weak self] (_: HistoryMultiMediaCell, _: UITraitCollection) in
+            guard let self else { return }
+            leftGradient.updateColors(for: traitCollection)
+            rightGradient.updateColors(for: traitCollection)
+        }
     }
 
     private func cancelLoad() {
