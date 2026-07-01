@@ -79,6 +79,29 @@ private func records() -> [TransferRecord] {
             attachmentURLs: [url("photo_2024.jpg")],
             fileBytes: 2_400_000
         ),
+        TransferRecord(
+            peers: [Peer(displayName: "🦊 Bob"), Peer(displayName: "🐻 Carol")],
+            date: now,
+            direction: .sent, type: .text,
+            detail: "Hey both — here are the meeting notes from this morning!"
+        ),
+        TransferRecord(
+            peers: [Peer(displayName: "🐼 Dave"), Peer(displayName: "🐱 Alice"), Peer(displayName: "🦊 Bob")],
+            date: now,
+            direction: .sent, type: .file,
+            detail: "slides_final.pdf",
+            attachmentURLs: [url("slides_final.pdf")],
+            fileBytes: 4_100_000
+        ),
+        TransferRecord(
+            peers: [
+                Peer(displayName: "🐻 Carol"), Peer(displayName: "🐱 Alice"),
+                Peer(displayName: "🦊 Bob"),   Peer(displayName: "🐼 Dave"),
+            ],
+            date: now,
+            direction: .received, type: .text,
+            detail: "Great, we're all synced up for the meeting!"
+        ),
         // ── YESTERDAY ─────────────────────────────────────────────────────────
         TransferRecord(
             peerEmoji: "🦊", peerName: "Bob",

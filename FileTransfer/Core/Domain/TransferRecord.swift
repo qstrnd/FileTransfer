@@ -30,8 +30,8 @@ enum TransferType: Sendable {
 
 struct TransferRecord: Identifiable, Hashable, Sendable {
     let id: UUID
-    let peerEmoji: String
-    let peerName: String
+    /// At least one peer. For group transfers, all recipients are listed.
+    let peers: [Peer]
     let date: Date
     let direction: TransferDirection
     let type: TransferType
@@ -41,6 +41,30 @@ struct TransferRecord: Identifiable, Hashable, Sendable {
     /// Combined byte count of all attachments; nil for types with no files (e.g. text).
     let fileBytes: Int64?
 
+    nonisolated var peerEmoji: String { peers.first?.emojiComponent ?? "" }
+    nonisolated var peerName: String { peers.first?.nameComponent ?? "" }
+
+    init(
+        id: UUID = UUID(),
+        peers: [Peer],
+        date: Date = .now,
+        direction: TransferDirection,
+        type: TransferType,
+        detail: String? = nil,
+        attachmentURLs: [URL] = [],
+        fileBytes: Int64? = nil
+    ) {
+        self.id = id
+        self.peers = peers
+        self.date = date
+        self.direction = direction
+        self.type = type
+        self.detail = detail
+        self.attachmentURLs = attachmentURLs
+        self.fileBytes = fileBytes
+    }
+
+    /// Convenience init for single-peer records — all existing call sites continue to compile.
     init(
         id: UUID = UUID(),
         peerEmoji: String,
@@ -52,15 +76,16 @@ struct TransferRecord: Identifiable, Hashable, Sendable {
         attachmentURLs: [URL] = [],
         fileBytes: Int64? = nil
     ) {
-        self.id = id
-        self.peerEmoji = peerEmoji
-        self.peerName = peerName
-        self.date = date
-        self.direction = direction
-        self.type = type
-        self.detail = detail
-        self.attachmentURLs = attachmentURLs
-        self.fileBytes = fileBytes
+        self.init(
+            id: id,
+            peers: [Peer(displayName: "\(peerEmoji) \(peerName)")],
+            date: date,
+            direction: direction,
+            type: type,
+            detail: detail,
+            attachmentURLs: attachmentURLs,
+            fileBytes: fileBytes
+        )
     }
 
     static func == (lhs: TransferRecord, rhs: TransferRecord) -> Bool { lhs.id == rhs.id }
