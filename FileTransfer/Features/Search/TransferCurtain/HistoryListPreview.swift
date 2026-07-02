@@ -66,10 +66,19 @@ private func records() -> [TransferRecord] {
             detail: "Sure! Everything looks great. I went through all the documents and they seem to be in order. Let me know if you need anything else — happy to help with the next batch whenever you're ready to send it over."
         ),
         TransferRecord(
-            peerEmoji: "🐻", peerName: "Carol",
+            peerEmoji: "🐟", peerName: "Fish",
             date: now,
-            direction: .received, type: .contact,
-            detail: "Jane Smith"
+            direction: .sent, type: .contact,
+            contacts: [ContactInfo(name: "Ljiljana Marković", phone: "+49 151 2240 88")]
+        ),
+        TransferRecord(
+            peerEmoji: "🐟", peerName: "Fish",
+            date: now,
+            direction: .sent, type: .contact,
+            contacts: [
+                ContactInfo(name: "Ljiljana Marković", phone: nil),
+                ContactInfo(name: "Jörg Weber", phone: nil),
+            ]
         ),
         TransferRecord(
             peerEmoji: "🐱", peerName: "Alice",
@@ -103,6 +112,29 @@ private func records() -> [TransferRecord] {
             detail: "Great, we're all synced up for the meeting!"
         ),
         // ── YESTERDAY ─────────────────────────────────────────────────────────
+        TransferRecord(
+            peerEmoji: "🐟", peerName: "Fish",
+            date: ago(1),
+            direction: .received, type: .contact,
+            contacts: [
+                ContactInfo(name: "Anja Krause",   phone: nil),
+                ContactInfo(name: "Tomáš Novák",   phone: nil),
+                ContactInfo(name: "Jörg Weber",    phone: nil),
+            ]
+        ),
+        TransferRecord(
+            peerEmoji: "🐟", peerName: "Fish",
+            date: ago(2),
+            direction: .sent, type: .contact,
+            contacts: [
+                ContactInfo(name: "Ljiljana Marković", phone: nil),
+                ContactInfo(name: "Jörg Weber",        phone: nil),
+                ContactInfo(name: "Anja Krause",       phone: nil),
+                ContactInfo(name: "Tomáš Novák",       phone: nil),
+                ContactInfo(name: "Erik Bauer",        phone: nil),
+                ContactInfo(name: "Sophie Müller",     phone: nil),
+            ]
+        ),
         TransferRecord(
             peerEmoji: "🦊", peerName: "Bob",
             date: ago(1),
@@ -190,7 +222,7 @@ private func records() -> [TransferRecord] {
 
 private final class HistoryListPreviewController: UIViewController {
 
-    private enum CellKind { case text, singleMedia, multiItem, document }
+    private enum CellKind { case text, contact, singleMedia, multiItem, document }
 
     private lazy var collectionView = UICollectionView(
         frame: .zero,
@@ -231,7 +263,8 @@ private final class HistoryListPreviewController: UIViewController {
 
     private func cellKind(for record: TransferRecord) -> CellKind {
         switch record.type {
-        case .text, .contact, .document: return .text
+        case .text, .document: return .text
+        case .contact: return .contact
         case .photo:
             switch record.attachmentURLs.count {
             case 0:    return .text
@@ -254,6 +287,10 @@ private final class HistoryListPreviewController: UIViewController {
             cell.onSizeChange = { [weak cv = self?.collectionView] in
                 UIView.animate(withDuration: 0.3) { cv?.performBatchUpdates(nil) }
             }
+        }
+        let contactReg = UICollectionView.CellRegistration<HistoryContactCell, UUID> { [weak self] cell, _, id in
+            guard let self, let record = byID[id] else { return }
+            cell.configure(with: record)
         }
         let imageReg = UICollectionView.CellRegistration<HistoryMediaCell, UUID> { [weak self] cell, _, id in
             guard let self, let record = byID[id] else { return }
@@ -281,6 +318,8 @@ private final class HistoryListPreviewController: UIViewController {
             switch cellKind(for: record) {
             case .text:
                 return cv.dequeueConfiguredReusableCell(using: textReg, for: indexPath, item: id)
+            case .contact:
+                return cv.dequeueConfiguredReusableCell(using: contactReg, for: indexPath, item: id)
             case .singleMedia:
                 return cv.dequeueConfiguredReusableCell(using: imageReg, for: indexPath, item: id)
             case .multiItem:

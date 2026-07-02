@@ -604,9 +604,11 @@ extension SearchViewModel: PeerSessionEvents {
 
         let (emoji, name) = Peer.parseDisplayName(peer.displayName)
         let detail = contactItems.count == 1 ? contactItems[0].displayName : "\(contactItems.count) contacts"
+        let contactInfos = contactItems.map { ContactInfo(name: $0.displayName, phone: $0.phoneNumbers.first) }
         addRecord(TransferRecord(
             peerEmoji: emoji, peerName: name,
-            direction: .received, type: .contact, detail: detail
+            direction: .received, type: .contact, detail: detail,
+            contacts: contactInfos
         ))
 
         receivedContact = ReceivedContactTransfer(

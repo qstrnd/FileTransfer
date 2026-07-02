@@ -6,13 +6,15 @@ extension TransferCurtainViewController {
     // MARK: - Cell type dispatch
 
     enum HistoryCellType {
-        case text, singleMedia, multiItem, document
+        case text, contact, singleMedia, multiItem, document
     }
 
     func cellType(for record: TransferRecord) -> HistoryCellType {
         switch record.type {
-        case .text, .contact, .document:
+        case .text, .document:
             return .text
+        case .contact:
+            return .contact
         case .photo:
             switch record.attachmentURLs.count {
             case 0:    return .text
@@ -38,6 +40,11 @@ extension TransferCurtainViewController {
             cell.onSizeChange = { [weak cv = self?.collectionView] in
                 UIView.animate(withDuration: 0.3) { cv?.performBatchUpdates(nil) }
             }
+        }
+
+        let contactReg = UICollectionView.CellRegistration<HistoryContactCell, UUID> { [weak self] cell, _, id in
+            guard let self, let record = recordsByID[id] else { return }
+            cell.configure(with: record)
         }
 
         let imageReg = UICollectionView.CellRegistration<HistoryMediaCell, UUID> { [weak self] cell, _, id in
@@ -78,6 +85,8 @@ extension TransferCurtainViewController {
             switch cellType(for: record) {
             case .text:
                 return cv.dequeueConfiguredReusableCell(using: textReg, for: indexPath, item: id)
+            case .contact:
+                return cv.dequeueConfiguredReusableCell(using: contactReg, for: indexPath, item: id)
             case .singleMedia:
                 return cv.dequeueConfiguredReusableCell(using: imageReg, for: indexPath, item: id)
             case .multiItem:

@@ -17,6 +17,8 @@ final class TransferItem {
     var attachmentURLsJSON: String?
     /// Combined byte count of all attachments; nil for non-file transfers.
     var fileBytes: Int64?
+    /// JSON-encoded array of ContactInfo for contact transfers; nil for all other types.
+    var contactsJSON: String?
 
     init(from record: TransferRecord) {
         self.id        = record.id
@@ -43,6 +45,12 @@ final class TransferItem {
            let json = String(data: data, encoding: .utf8) {
             self.attachmentURLsJSON = json
         }
+
+        if !record.contacts.isEmpty,
+           let data = try? JSONEncoder().encode(record.contacts),
+           let json = String(data: data, encoding: .utf8) {
+            self.contactsJSON = json
+        }
     }
 
     @MainActor var asRecord: TransferRecord {
@@ -63,10 +71,18 @@ final class TransferItem {
                 .filter { FileManager.default.fileExists(atPath: $0.path(percentEncoded: false)) }
         }
 
+        var contacts: [ContactInfo] = []
+        if let json = contactsJSON,
+           let data = json.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode([ContactInfo].self, from: data) {
+            contacts = decoded
+        }
+
         return TransferRecord(
             id: id, peerEmoji: peerEmoji, peerName: peerName,
             date: date, direction: direction, type: type, detail: detail,
-            attachmentURLs: attachmentURLs, fileBytes: fileBytes
+            attachmentURLs: attachmentURLs, fileBytes: fileBytes,
+            contacts: contacts
         )
     }
 }

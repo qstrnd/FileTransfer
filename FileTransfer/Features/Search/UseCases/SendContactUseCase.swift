@@ -26,6 +26,11 @@ final class SendContactUseCase {
 
         outgoingTransfer = OutgoingContactTransfer(totalItems: contacts.count, peerCount: peers.count)
 
+        let contactInfos = contacts.map { contact in
+            let name = CNContactFormatter.string(from: contact, style: .fullName) ?? "Contact"
+            return ContactInfo(name: name, phone: contact.phoneNumbers.first?.value.stringValue)
+        }
+
         for peer in peers {
             session.sendContact(data: vCardData, to: peer)
             history.add(TransferRecord(
@@ -33,7 +38,8 @@ final class SendContactUseCase {
                 peerName: peer.nameComponent,
                 direction: .sent,
                 type: .contact,
-                detail: displayName
+                detail: displayName,
+                contacts: contactInfos
             ))
         }
 

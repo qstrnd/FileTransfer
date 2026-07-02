@@ -40,6 +40,8 @@ struct TransferRecord: Identifiable, Hashable, Sendable {
     let attachmentURLs: [URL]
     /// Combined byte count of all attachments; nil for types with no files (e.g. text).
     let fileBytes: Int64?
+    /// Non-empty only when type == .contact. Ordered list of contacts in this transfer.
+    let contacts: [ContactInfo]
 
     nonisolated var peerEmoji: String { peers.first?.emojiComponent ?? "" }
     nonisolated var peerName: String { peers.first?.nameComponent ?? "" }
@@ -52,7 +54,8 @@ struct TransferRecord: Identifiable, Hashable, Sendable {
         type: TransferType,
         detail: String? = nil,
         attachmentURLs: [URL] = [],
-        fileBytes: Int64? = nil
+        fileBytes: Int64? = nil,
+        contacts: [ContactInfo] = []
     ) {
         self.id = id
         self.peers = peers
@@ -62,6 +65,7 @@ struct TransferRecord: Identifiable, Hashable, Sendable {
         self.detail = detail
         self.attachmentURLs = attachmentURLs
         self.fileBytes = fileBytes
+        self.contacts = contacts
     }
 
     /// Convenience init for single-peer records — all existing call sites continue to compile.
@@ -74,7 +78,8 @@ struct TransferRecord: Identifiable, Hashable, Sendable {
         type: TransferType,
         detail: String? = nil,
         attachmentURLs: [URL] = [],
-        fileBytes: Int64? = nil
+        fileBytes: Int64? = nil,
+        contacts: [ContactInfo] = []
     ) {
         self.init(
             id: id,
@@ -84,7 +89,8 @@ struct TransferRecord: Identifiable, Hashable, Sendable {
             type: type,
             detail: detail,
             attachmentURLs: attachmentURLs,
-            fileBytes: fileBytes
+            fileBytes: fileBytes,
+            contacts: contacts
         )
     }
 
