@@ -8,8 +8,8 @@ final class TransferAttachmentCache: AttachmentCacheGate, @unchecked Sendable {
     private let root: URL
 
     init() {
-        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        root = caches.appendingPathComponent("TransferAttachments", isDirectory: true)
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        root = appSupport.appendingPathComponent("TransferAttachments", isDirectory: true)
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
     }
 

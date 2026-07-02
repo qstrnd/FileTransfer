@@ -68,7 +68,6 @@ final class TransferItem {
            let data = json.data(using: .utf8),
            let strings = try? JSONDecoder().decode([String].self, from: data) {
             attachmentURLs = strings.compactMap(URL.init(string:))
-                .filter { FileManager.default.fileExists(atPath: $0.path(percentEncoded: false)) }
         }
 
         var contacts: [ContactInfo] = []
