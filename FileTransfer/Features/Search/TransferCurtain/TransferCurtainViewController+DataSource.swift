@@ -6,7 +6,7 @@ extension TransferCurtainViewController {
     // MARK: - Cell type dispatch
 
     enum HistoryCellType {
-        case text, singleMedia, multiMedia, document
+        case text, singleMedia, multiItem, document
     }
 
     func cellType(for record: TransferRecord) -> HistoryCellType {
@@ -17,10 +17,14 @@ extension TransferCurtainViewController {
             switch record.attachmentURLs.count {
             case 0:    return .text
             case 1:    return .singleMedia
-            default:   return .multiMedia
+            default:   return .multiItem
             }
         case .file:
-            return .document
+            switch record.attachmentURLs.count {
+            case 0:    return .text
+            case 1:    return .document
+            default:   return .multiItem
+            }
         }
     }
 
@@ -41,10 +45,10 @@ extension TransferCurtainViewController {
             cell.configure(with: record, gate: thumbnailGate ?? HistoryThumbnailService())
         }
 
-        let multiReg = UICollectionView.CellRegistration<HistoryMultiMediaCell, UUID> { [weak self] cell, _, id in
+        let multiReg = UICollectionView.CellRegistration<HistoryMultiItemCell, UUID> { [weak self] cell, _, id in
             guard let self, let record = recordsByID[id] else { return }
             cell.configure(with: record, gate: thumbnailGate ?? HistoryThumbnailService())
-            cell.onThumbnailTap = { [weak self] index in
+            cell.onItemTap = { [weak self] index in
                 guard let self else { return }
                 currentPreviewURLs = record.attachmentURLs
                 let ql = QLPreviewController()
@@ -76,7 +80,7 @@ extension TransferCurtainViewController {
                 return cv.dequeueConfiguredReusableCell(using: textReg, for: indexPath, item: id)
             case .singleMedia:
                 return cv.dequeueConfiguredReusableCell(using: imageReg, for: indexPath, item: id)
-            case .multiMedia:
+            case .multiItem:
                 return cv.dequeueConfiguredReusableCell(using: multiReg, for: indexPath, item: id)
             case .document:
                 return cv.dequeueConfiguredReusableCell(using: docReg, for: indexPath, item: id)

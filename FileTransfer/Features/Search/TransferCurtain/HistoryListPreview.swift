@@ -112,6 +112,22 @@ private func records() -> [TransferRecord] {
             fileBytes: 5_100_000
         ),
         TransferRecord(
+            peerEmoji: "🐻", peerName: "Carol",
+            date: ago(1),
+            direction: .sent, type: .file,
+            detail: "2 documents",
+            attachmentURLs: [url("report.pdf"), url("budget.xlsx")],
+            fileBytes: 1_200_000
+        ),
+        TransferRecord(
+            peerEmoji: "🐼", peerName: "Dave",
+            date: ago(1),
+            direction: .received, type: .file,
+            detail: "3 documents",
+            attachmentURLs: [url("deck.pptx"), url("notes.docx"), url("archive.zip")],
+            fileBytes: 8_500_000
+        ),
+        TransferRecord(
             peerEmoji: "🐱", peerName: "Alice",
             date: ago(1),
             direction: .sent, type: .photo,
@@ -174,7 +190,7 @@ private func records() -> [TransferRecord] {
 
 private final class HistoryListPreviewController: UIViewController {
 
-    private enum CellKind { case text, singleMedia, multiMedia, document }
+    private enum CellKind { case text, singleMedia, multiItem, document }
 
     private lazy var collectionView = UICollectionView(
         frame: .zero,
@@ -220,9 +236,14 @@ private final class HistoryListPreviewController: UIViewController {
             switch record.attachmentURLs.count {
             case 0:    return .text
             case 1:    return .singleMedia
-            default:   return .multiMedia
+            default:   return .multiItem
             }
-        case .file: return .document
+        case .file:
+            switch record.attachmentURLs.count {
+            case 0:    return .text
+            case 1:    return .document
+            default:   return .multiItem
+            }
         }
     }
 
@@ -238,7 +259,7 @@ private final class HistoryListPreviewController: UIViewController {
             guard let self, let record = byID[id] else { return }
             cell.configure(with: record, gate: gate)
         }
-        let multiReg = UICollectionView.CellRegistration<HistoryMultiMediaCell, UUID> { [weak self] cell, _, id in
+        let multiReg = UICollectionView.CellRegistration<HistoryMultiItemCell, UUID> { [weak self] cell, _, id in
             guard let self, let record = byID[id] else { return }
             cell.configure(with: record, gate: gate)
         }
@@ -262,7 +283,7 @@ private final class HistoryListPreviewController: UIViewController {
                 return cv.dequeueConfiguredReusableCell(using: textReg, for: indexPath, item: id)
             case .singleMedia:
                 return cv.dequeueConfiguredReusableCell(using: imageReg, for: indexPath, item: id)
-            case .multiMedia:
+            case .multiItem:
                 return cv.dequeueConfiguredReusableCell(using: multiReg, for: indexPath, item: id)
             case .document:
                 return cv.dequeueConfiguredReusableCell(using: docReg, for: indexPath, item: id)
