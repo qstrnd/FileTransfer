@@ -1,6 +1,7 @@
 import SwiftData
 import Foundation
 
+
 /// Persistent backing store for a single file/text transfer event.
 /// Enums are stored as raw strings to avoid Swift 6 actor-isolation issues
 /// that arise when RawRepresentable enum conformances interact with SwiftData.
@@ -13,7 +14,7 @@ final class TransferItem {
     var directionRaw: String   // "sent" | "received"
     var typeRaw: String        // "text" | "photo" | "document" | "contact" | "file"
     var detail: String?
-    /// JSON-encoded array of absolute file:// URL strings for cached attachments.
+    /// JSON-encoded array of paths relative to Application Support for cached attachments.
     var attachmentURLsJSON: String?
     /// Combined byte count of all attachments; nil for non-file transfers.
     var fileBytes: Int64?
@@ -39,9 +40,18 @@ final class TransferItem {
         self.detail = record.detail
         self.fileBytes = record.fileBytes
 
-        let urlStrings = record.attachmentURLs.map(\.absoluteString)
-        if !urlStrings.isEmpty,
-           let data = try? JSONEncoder().encode(urlStrings),
+        // Store paths relative to Application Support so they survive container UUID changes.
+        let appSupportBase = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let basePath = appSupportBase.path(percentEncoded: false)
+        let relativePaths: [String] = record.attachmentURLs.map { url in
+            let filePath = url.path(percentEncoded: false)
+            guard filePath.hasPrefix(basePath) else { return url.absoluteString }
+            var rel = String(filePath.dropFirst(basePath.count))
+            if rel.hasPrefix("/") { rel = String(rel.dropFirst()) }
+            return rel
+        }
+        if !relativePaths.isEmpty,
+           let data = try? JSONEncoder().encode(relativePaths),
            let json = String(data: data, encoding: .utf8) {
             self.attachmentURLsJSON = json
         }
@@ -67,7 +77,23 @@ final class TransferItem {
         if let json = attachmentURLsJSON,
            let data = json.data(using: .utf8),
            let strings = try? JSONDecoder().decode([String].self, from: data) {
-            attachmentURLs = strings.compactMap(URL.init(string:))
+            let appSupportBase = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            attachmentURLs = strings.compactMap { string -> URL? in
+                if string.hasPrefix("file://") {
+                    // Legacy absolute URL — re-anchor by extracting the
+                    // TransferAttachments/… suffix and resolving against the live base.
+                    guard let legacyURL = URL(string: string) else { return nil }
+                    let legacyPath = legacyURL.path(percentEncoded: false)
+                    if let range = legacyPath.range(of: "/TransferAttachments/") {
+                        let suffix = String(legacyPath[range.lowerBound...].dropFirst())
+                        return appSupportBase.appending(path: suffix, directoryHint: .notDirectory)
+                    }
+                    return legacyURL
+                } else {
+                    // Relative path — resolve against current Application Support.
+                    return appSupportBase.appending(path: string, directoryHint: .notDirectory)
+                }
+            }
         }
 
         var contacts: [ContactInfo] = []
