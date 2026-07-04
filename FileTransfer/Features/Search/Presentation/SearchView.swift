@@ -80,6 +80,7 @@ struct SearchView: View {
         .background(PinnedWindow(
             content: ReceivedFileAlert(
                 transfer: viewModel.receivedFiles,
+                thumbnailGate: viewModel.historyThumbnailGate,
                 onDismiss: { viewModel.receivedFiles = nil },
                 onSaveToFiles: { viewModel.fileSaveService.saveToFiles($0) },
                 onShare:       { viewModel.fileSaveService.share($0) }

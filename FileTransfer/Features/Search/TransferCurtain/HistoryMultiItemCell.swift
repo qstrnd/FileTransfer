@@ -45,9 +45,10 @@ final class HistoryMultiItemCell: HistoryBaseCell {
     var onItemTap: ((Int) -> Void)?
 
     private var contentKind: ContentKind = .photo
-    private var loadTasks:   [Task<Void, Never>] = []
+    private var photoLoadTasks: [Task<Void, Never>] = []
+    private var documentCards:  [DocumentCardView] = []
     private var currentURLs: [URL] = []
-    private var imageViews:  [UIImageView] = []   // image view per item (photo itself or embedded in card)
+    private var imageViews:  [UIImageView] = []   // photo image views only
 
     private let leftGradient  = EdgeGradientView(isLeading: true)
     private let rightGradient = EdgeGradientView(isLeading: false)
@@ -107,12 +108,29 @@ final class HistoryMultiItemCell: HistoryBaseCell {
         let twoItems = urls.count == 2
 
         for (idx, url) in urls.enumerated() {
-            let (itemView, imageView) = makeItemView(for: url, index: idx)
+            let itemView: UIView
+            switch contentKind {
+            case .photo:
+                let (view, iv) = makePhotoView(index: idx)
+                itemView = view
+                imageViews.append(iv)
+                photoLoadTasks.append(Task { @MainActor [weak self] in
+                    guard let data = await gate.thumbnail(for: url),
+                          let img = UIImage(data: data) else { return }
+                    guard self?.currentURLs.indices.contains(idx) == true,
+                          self?.currentURLs[idx] == url else { return }
+                    UIView.transition(with: iv, duration: 0.2,
+                                      options: .transitionCrossDissolve) { iv.image = img }
+                })
+            case .document:
+                let card = DocumentCardView(url: url, index: idx)
+                card.onTap = { [weak self] i in self?.onItemTap?(i) }
+                documentCards.append(card)
+                itemView = card
+                card.load(using: gate)
+            }
 
-            // For exactly 2 items, size each so both fit the visible strip without scrolling:
-            //   itemWidth = (visibleWidth - gap) / 2
-            //   visibleWidth = scrollView.frame.width - leftInset - rightInset
-            //   → itemWidth = 0.5 × frameLayout.width − (leftInset + rightInset + gap) / 2
+            // For exactly 2 items, size each so both fit the visible strip without scrolling.
             let widthConstraint: NSLayoutConstraint
             if twoItems {
                 let c = -(Self.scrollLeftInset + Self.scrollRightInset + Self.itemSpacing) / 2
@@ -127,16 +145,6 @@ final class HistoryMultiItemCell: HistoryBaseCell {
             }
             thumbsStack.addArrangedSubview(itemView)
             widthConstraint.isActive = true
-            imageViews.append(imageView)
-
-            loadTasks.append(Task { @MainActor [weak self] in
-                guard let data = await gate.thumbnail(for: url),
-                      let img = UIImage(data: data) else { return }
-                guard self?.currentURLs.indices.contains(idx) == true,
-                      self?.currentURLs[idx] == url else { return }
-                UIView.transition(with: imageView, duration: 0.2,
-                                  options: .transitionCrossDissolve) { imageView.image = img }
-            })
         }
     }
 
@@ -149,9 +157,9 @@ final class HistoryMultiItemCell: HistoryBaseCell {
         onItemTap = nil
     }
 
-    // MARK: - Tap
+    // MARK: - Tap (photos only — DocumentCardView handles its own tap)
 
-    @objc private func didTapItem(_ sender: UITapGestureRecognizer) {
+    @objc private func didTapPhoto(_ sender: UITapGestureRecognizer) {
         guard let v = sender.view else { return }
         UIView.animate(withDuration: 0.1, animations: { v.alpha = 0.65 },
                        completion: { _ in UIView.animate(withDuration: 0.12) { v.alpha = 1.0 } })
@@ -202,21 +210,10 @@ final class HistoryMultiItemCell: HistoryBaseCell {
             guard let self else { return }
             leftGradient.updateColors(for: tc)
             rightGradient.updateColors(for: tc)
-            let borderColor = UIColor.separator.resolvedColor(with: tc).withAlphaComponent(0.35).cgColor
-            thumbsStack.arrangedSubviews.forEach { $0.layer.borderColor = borderColor }
         }
     }
 
-    // MARK: - Item view factories
-
-    private func makeItemView(for url: URL, index: Int) -> (UIView, UIImageView) {
-        switch contentKind {
-        case .photo:
-            return makePhotoView(index: index)
-        case .document:
-            return makeDocumentCard(for: url, index: index)
-        }
-    }
+    // MARK: - Photo view factory
 
     private func makePhotoView(index: Int) -> (UIView, UIImageView) {
         let iv = UIImageView()
@@ -227,80 +224,22 @@ final class HistoryMultiItemCell: HistoryBaseCell {
         iv.translatesAutoresizingMaskIntoConstraints = false
         iv.isUserInteractionEnabled = true
         iv.tag = index
-        iv.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(didTapItem(_:))))
+        iv.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(didTapPhoto(_:))))
         return (iv, iv)
-    }
-
-    private func makeDocumentCard(for url: URL, index: Int) -> (UIView, UIImageView) {
-        let card = UIView()
-        card.backgroundColor = .secondarySystemFill
-        card.layer.cornerRadius = 8
-        card.layer.borderWidth = 0.33
-        card.layer.borderColor = UIColor.separator.resolvedColor(with: traitCollection).withAlphaComponent(0.35).cgColor
-        card.clipsToBounds = true
-        card.translatesAutoresizingMaskIntoConstraints = false
-        card.isUserInteractionEnabled = true
-        card.tag = index
-        card.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(didTapItem(_:))))
-
-        let iv = UIImageView()
-        iv.contentMode = .scaleAspectFill
-        iv.clipsToBounds = true
-        iv.translatesAutoresizingMaskIntoConstraints = false
-        card.addSubview(iv)
-
-        let ext = url.pathExtension.uppercased()
-        let badge = makeBadgeLabel(text: ext.isEmpty ? "FILE" : ext, color: badgeColor(for: ext))
-        card.addSubview(badge)
-
-        NSLayoutConstraint.activate([
-            iv.topAnchor.constraint(equalTo: card.topAnchor),
-            iv.bottomAnchor.constraint(equalTo: card.bottomAnchor),
-            iv.leadingAnchor.constraint(equalTo: card.leadingAnchor),
-            iv.trailingAnchor.constraint(equalTo: card.trailingAnchor),
-
-            badge.topAnchor.constraint(equalTo: card.topAnchor, constant: 6),
-            badge.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -6),
-            badge.heightAnchor.constraint(equalToConstant: 18),
-        ])
-
-        return (card, iv)
-    }
-
-    private func makeBadgeLabel(text: String, color: UIColor) -> UILabel {
-        let l = UILabel()
-        l.text = "  \(text)  "
-        l.font = .systemFont(ofSize: 10, weight: .bold)
-        l.textColor = .white
-        l.textAlignment = .center
-        l.backgroundColor = color
-        l.layer.cornerRadius = 4
-        l.clipsToBounds = true
-        l.translatesAutoresizingMaskIntoConstraints = false
-        return l
-    }
-
-    private func badgeColor(for ext: String) -> UIColor {
-        switch ext {
-        case "PDF":             return UIColor(red: 0.86, green: 0.20, blue: 0.18, alpha: 1)
-        case "DOC", "DOCX":    return UIColor(red: 0.17, green: 0.45, blue: 0.90, alpha: 1)
-        case "XLS", "XLSX":    return UIColor(red: 0.13, green: 0.60, blue: 0.35, alpha: 1)
-        case "PPT", "PPTX":    return UIColor(red: 0.91, green: 0.38, blue: 0.17, alpha: 1)
-        case "ZIP", "RAR":     return UIColor(red: 0.55, green: 0.40, blue: 0.80, alpha: 1)
-        default:               return UIColor(red: 0.40, green: 0.40, blue: 0.44, alpha: 1)
-        }
     }
 
     // MARK: - Helpers
 
     private func cancelLoad() {
-        loadTasks.forEach { $0.cancel() }
-        loadTasks = []
+        photoLoadTasks.forEach { $0.cancel() }
+        photoLoadTasks = []
+        documentCards.forEach { $0.cancelLoad() }
     }
 
     private func clearItems() {
         thumbsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         imageViews = []
+        documentCards = []
     }
 
     private func metaText(for record: TransferRecord, count: Int) -> String {

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ReceivedFileAlert: View {
     let transfer: ReceivedFileTransfer?
+    let thumbnailGate: any HistoryThumbnailGate
     let onDismiss: () -> Void
     let onSaveToFiles: ([ReceivedFile]) -> Void
     let onShare: ([ReceivedFile]) -> Void
@@ -46,7 +47,8 @@ struct ReceivedFileAlert: View {
 
             Divider()
 
-            fileList(for: transfer.files)
+            FilePreviewStrip(files: transfer.files, gate: thumbnailGate)
+                .frame(height: FilePreviewStrip.height(for: transfer.files.count))
 
             Divider()
 
@@ -88,59 +90,5 @@ struct ReceivedFileAlert: View {
         .glassEffect(in: RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
         .frame(maxWidth: 400)
         .padding(.horizontal, 24)
-    }
-
-    @ViewBuilder
-    private func fileList(for files: [ReceivedFile]) -> some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                ForEach(Array(files.enumerated()), id: \.element.id) { idx, file in
-                    HStack(spacing: 12) {
-                        Image(systemName: fileIcon(for: file.name))
-                            .font(.system(size: 22))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 32)
-                        Text(file.name)
-                            .font(.subheadline)
-                            .foregroundStyle(.primary)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
-                    if idx < files.count - 1 {
-                        Divider().padding(.leading, 64)
-                    }
-                }
-            }
-        }
-        .frame(maxHeight: 240)
-    }
-
-    private func fileIcon(for filename: String) -> String {
-        let ext = (filename as NSString).pathExtension.lowercased()
-        switch ext {
-        case "pdf":
-            return "doc.richtext"
-        case "doc", "docx", "txt", "rtf":
-            return "doc.text"
-        case "xls", "xlsx", "csv":
-            return "tablecells"
-        case "ppt", "pptx":
-            return "rectangle.on.rectangle"
-        case "zip", "gz", "tar", "rar", "7z":
-            return "doc.zipper"
-        case "mp3", "wav", "aac", "flac", "m4a":
-            return "music.note"
-        case "mp4", "mov", "avi", "mkv", "m4v":
-            return "video"
-        case "jpg", "jpeg", "png", "heic", "gif", "webp":
-            return "photo"
-        case "swift", "py", "js", "ts", "html", "css", "json", "xml":
-            return "chevron.left.forwardslash.chevron.right"
-        default:
-            return "doc"
-        }
     }
 }
