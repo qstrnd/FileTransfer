@@ -37,7 +37,13 @@ final class HistoryStatusBadge: UIView {
 
     private func setup() {
         layer.cornerRadius = 12
+        layer.borderWidth = 1.5
+        layer.borderColor = UIColor.systemBackground.cgColor
         clipsToBounds = true
+
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { [weak self] (_: HistoryStatusBadge, tc: UITraitCollection) in
+            self?.layer.borderColor = UIColor.systemBackground.resolvedColor(with: tc).cgColor
+        }
 
         iconView.contentMode = .scaleAspectFit
         iconView.translatesAutoresizingMaskIntoConstraints = false
