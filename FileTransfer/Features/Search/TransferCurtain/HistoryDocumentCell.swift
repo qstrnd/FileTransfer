@@ -54,6 +54,12 @@ final class HistoryDocumentCell: HistoryBaseCell {
         return l
     }()
 
+    @objc private func appWillEnterForeground() { refreshCardBorder(for: traitCollection) }
+
+    private func refreshCardBorder(for tc: UITraitCollection) {
+        card.layer.borderColor = UIColor.separator.resolvedColor(with: tc).withAlphaComponent(0.35).cgColor
+    }
+
     // MARK: - Init
 
     override init(frame: CGRect) {
@@ -101,6 +107,16 @@ final class HistoryDocumentCell: HistoryBaseCell {
     // MARK: - Private
 
     private func setupContent() {
+        card.layer.borderWidth = 0.33
+        card.layer.borderColor = UIColor.separator.withAlphaComponent(0.35).cgColor
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { [weak self] (_: HistoryDocumentCell, tc: UITraitCollection) in
+            self?.refreshCardBorder(for: tc)
+        }
+        NotificationCenter.default.addObserver(self,
+            selector: #selector(appWillEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil)
+
         card.addSubview(previewImageView)
         card.addSubview(typeBadge)
         contentContainer.addSubview(card)

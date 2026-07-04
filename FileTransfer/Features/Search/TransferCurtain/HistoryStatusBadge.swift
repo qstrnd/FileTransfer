@@ -35,6 +35,12 @@ final class HistoryStatusBadge: UIView {
         invalidateIntrinsicContentSize()
     }
 
+    private func refreshBorderColor(for tc: UITraitCollection) {
+        layer.borderColor = UIColor.systemBackground.resolvedColor(with: tc).cgColor
+    }
+
+    @objc private func appWillEnterForeground() { refreshBorderColor(for: traitCollection) }
+
     private func setup() {
         layer.cornerRadius = 12
         layer.borderWidth = 1.5
@@ -42,8 +48,12 @@ final class HistoryStatusBadge: UIView {
         clipsToBounds = true
 
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { [weak self] (_: HistoryStatusBadge, tc: UITraitCollection) in
-            self?.layer.borderColor = UIColor.systemBackground.resolvedColor(with: tc).cgColor
+            self?.refreshBorderColor(for: tc)
         }
+        NotificationCenter.default.addObserver(self,
+            selector: #selector(appWillEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil)
 
         iconView.contentMode = .scaleAspectFit
         iconView.translatesAutoresizingMaskIntoConstraints = false

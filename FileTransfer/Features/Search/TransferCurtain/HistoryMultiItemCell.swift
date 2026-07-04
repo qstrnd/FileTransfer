@@ -12,6 +12,10 @@ private final class EdgeGradientView: UIView {
         gradientLayer.startPoint = isLeading ? CGPoint(x: 0, y: 0.5) : CGPoint(x: 1, y: 0.5)
         gradientLayer.endPoint   = isLeading ? CGPoint(x: 1, y: 0.5) : CGPoint(x: 0, y: 0.5)
         gradientLayer.locations  = [0, 1]
+        NotificationCenter.default.addObserver(self,
+            selector: #selector(appWillEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil)
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -20,6 +24,8 @@ private final class EdgeGradientView: UIView {
         let bg = UIColor.systemBackground.resolvedColor(with: tc)
         gradientLayer.colors = [bg.cgColor, bg.withAlphaComponent(0).cgColor]
     }
+
+    @objc private func appWillEnterForeground() { updateColors(for: traitCollection) }
 }
 
 /// Multi-item horizontal strip cell — supports both photo thumbnails and document cards.
@@ -192,10 +198,12 @@ final class HistoryMultiItemCell: HistoryBaseCell {
 
         leftGradient.updateColors(for: traitCollection)
         rightGradient.updateColors(for: traitCollection)
-        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { [weak self] (_: HistoryMultiItemCell, _: UITraitCollection) in
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { [weak self] (_: HistoryMultiItemCell, tc: UITraitCollection) in
             guard let self else { return }
-            leftGradient.updateColors(for: traitCollection)
-            rightGradient.updateColors(for: traitCollection)
+            leftGradient.updateColors(for: tc)
+            rightGradient.updateColors(for: tc)
+            let borderColor = UIColor.separator.resolvedColor(with: tc).withAlphaComponent(0.35).cgColor
+            thumbsStack.arrangedSubviews.forEach { $0.layer.borderColor = borderColor }
         }
     }
 
@@ -227,6 +235,8 @@ final class HistoryMultiItemCell: HistoryBaseCell {
         let card = UIView()
         card.backgroundColor = .secondarySystemFill
         card.layer.cornerRadius = 8
+        card.layer.borderWidth = 0.33
+        card.layer.borderColor = UIColor.separator.resolvedColor(with: traitCollection).withAlphaComponent(0.35).cgColor
         card.clipsToBounds = true
         card.translatesAutoresizingMaskIntoConstraints = false
         card.isUserInteractionEnabled = true

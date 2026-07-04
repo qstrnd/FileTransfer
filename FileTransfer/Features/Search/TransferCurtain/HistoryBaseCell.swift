@@ -89,9 +89,12 @@ class HistoryBaseCell: UICollectionViewCell {
     private func setupBase() {
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { [weak self] (_: HistoryBaseCell, _: UITraitCollection) in
             guard let self else { return }
-            let color = UIColor.systemBackground.resolvedColor(with: traitCollection).cgColor
-            avatarContainer.subviews.forEach { $0.layer.borderColor = color }
+            refreshAvatarBorderColors()
         }
+        NotificationCenter.default.addObserver(self,
+            selector: #selector(refreshAvatarBorderColors),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil)
         // contentContainer added first → sits behind header elements in Z-order
         contentView.addSubview(contentContainer)
         contentView.addSubview(separator)
@@ -149,6 +152,11 @@ class HistoryBaseCell: UICollectionViewCell {
 
         // Ensure the cell is always tall enough to show the full avatar cluster.
         contentView.heightAnchor.constraint(greaterThanOrEqualToConstant: 72).isActive = true
+    }
+
+    @objc private func refreshAvatarBorderColors() {
+        let color = UIColor.systemBackground.resolvedColor(with: traitCollection).cgColor
+        avatarContainer.subviews.forEach { $0.layer.borderColor = color }
     }
 
     // MARK: - Peer avatar cluster

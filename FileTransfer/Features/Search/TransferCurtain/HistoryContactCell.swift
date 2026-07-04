@@ -69,6 +69,10 @@ private final class ContactGradientView: UIView {
         gradientLayer.startPoint = isLeading ? CGPoint(x: 0, y: 0.5) : CGPoint(x: 1, y: 0.5)
         gradientLayer.endPoint   = isLeading ? CGPoint(x: 1, y: 0.5) : CGPoint(x: 0, y: 0.5)
         gradientLayer.locations  = [0, 1]
+        NotificationCenter.default.addObserver(self,
+            selector: #selector(appWillEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil)
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -77,6 +81,8 @@ private final class ContactGradientView: UIView {
         let bg = UIColor.systemBackground.resolvedColor(with: tc)
         gradientLayer.colors = [bg.cgColor, bg.withAlphaComponent(0).cgColor]
     }
+
+    @objc private func appWillEnterForeground() { updateColors(for: traitCollection) }
 }
 
 // MARK: - HistoryContactCell

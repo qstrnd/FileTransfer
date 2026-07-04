@@ -2,6 +2,7 @@ import CoreGraphics
 import Foundation
 import ImageIO
 import PDFKit
+import QuickLookThumbnailing
 import UIKit
 
 /// Generates downsampled thumbnails for images and PDFs.
@@ -37,7 +38,7 @@ final class HistoryThumbnailService: HistoryThumbnailGate, @unchecked Sendable {
         }
 
         return await Task.detached(priority: .utility) { [weak self] in
-            self?.generate(url: url)
+            await self?.generate(url: url)
         }.value
     }
 
@@ -53,19 +54,35 @@ final class HistoryThumbnailService: HistoryThumbnailGate, @unchecked Sendable {
 
     // MARK: - Private
 
-    private nonisolated func generate(url: URL) -> Data? {
+    private nonisolated static let imageExtensions: Set<String> = [
+        "jpg", "jpeg", "png", "heic", "heif", "gif", "tif", "tiff", "bmp", "webp"
+    ]
+
+    private nonisolated func generate(url: URL) async -> Data? {
         let ext = url.pathExtension.lowercased()
         let image: UIImage?
         if ext == "pdf" {
             image = pdfThumbnail(at: url)
-        } else {
+        } else if Self.imageExtensions.contains(ext) {
             image = imageThumbnail(at: url)
+        } else {
+            image = await qlThumbnail(at: url)
         }
         guard let jpeg = image?.jpegData(compressionQuality: 0.8) else { return nil }
         let key = url.absoluteString as NSString
         memCache.setObject(jpeg as NSData, forKey: key, cost: jpeg.count)
         try? jpeg.write(to: diskCacheURL(for: url))
         return jpeg
+    }
+
+    private nonisolated func qlThumbnail(at url: URL) async -> UIImage? {
+        let request = QLThumbnailGenerator.Request(
+            fileAt: url,
+            size: CGSize(width: 600, height: 800),
+            scale: 2,
+            representationTypes: .thumbnail
+        )
+        return try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request).uiImage
     }
 
     private nonisolated func imageThumbnail(at url: URL) -> UIImage? {
