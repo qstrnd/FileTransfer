@@ -646,7 +646,9 @@ extension SearchViewModel: PeerSessionEvents {
         Task { @MainActor [weak self] in
             guard let self else { return }
             // Cache runs concurrently with the toast delay.
-            async let cachedURLs = attachmentCache.cache(srcURLs, forRecord: recordID)
+            // fileName already includes the extension (e.g. "IMG_1234.heic").
+            let mediaNames: [String?] = items.map(\.fileName)
+            async let cachedURLs = attachmentCache.cache(srcURLs, names: mediaNames, forRecord: recordID)
             try? await Task.sleep(for: .seconds(1.2))
             receivingMediaTransfer = nil
             receivedMedia = ReceivedMediaTransfer(senderName: senderName, items: items)
@@ -695,7 +697,9 @@ extension SearchViewModel: PeerSessionEvents {
 
         Task { @MainActor [weak self] in
             guard let self else { return }
-            async let cachedURLs = attachmentCache.cache(srcURLs, forRecord: recordID)
+            // files[i].name is the original filename sent by the peer.
+            let fileNames: [String?] = files.map { $0.name }
+            async let cachedURLs = attachmentCache.cache(srcURLs, names: fileNames, forRecord: recordID)
             try? await Task.sleep(for: .seconds(1.2))
             receivingFileTransfer = nil
             receivedFiles = ReceivedFileTransfer(senderName: senderName, files: files)

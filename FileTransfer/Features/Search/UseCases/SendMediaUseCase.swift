@@ -77,7 +77,12 @@ final class SendMediaUseCase {
 
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                let cachedURLs = await attachmentCache.cache(srcURLs, forRecord: recordID)
+                let names: [String?] = items.map { item in
+                    guard let base = item.fileName else { return nil }
+                    let ext = item.fileURL.pathExtension.lowercased()
+                    return ext.isEmpty ? base : "\(base).\(ext)"
+                }
+                let cachedURLs = await attachmentCache.cache(srcURLs, names: names, forRecord: recordID)
                 history.add(TransferRecord(
                     id: recordID,
                     peerEmoji: peer.emojiComponent,

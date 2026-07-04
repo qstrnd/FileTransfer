@@ -26,8 +26,11 @@ final class SendFileUseCase {
     func send(_ urls: [URL], to peers: [Peer]) {
         guard !urls.isEmpty, !peers.isEmpty else { return }
         let total = urls.count
+        // Clean up iOS file-picker temp-name prefix (fp_<UUID>_OriginalName.pdf → OriginalName.pdf)
+        // so the original filename is preserved both in the wire format and in the cache.
+        let cleanNames = urls.map { Self.cleanFileName($0) }
         let files = urls.enumerated().map { idx, url in
-            FileToSend(url: url, name: url.lastPathComponent, index: idx, total: total)
+            FileToSend(url: url, name: cleanNames[idx], index: idx, total: total)
         }
         outgoingTransfer = OutgoingFileTransfer(totalFiles: total, peerCount: peers.count)
         activeProgresses = []
@@ -35,7 +38,7 @@ final class SendFileUseCase {
 
         let srcURLs = urls
         let totalBytes = attachmentCache.fileBytes(for: srcURLs)
-        let detail = total == 1 ? urls[0].lastPathComponent : "\(total) files"
+        let detail = total == 1 ? cleanNames[0] : "\(total) files"
 
         for peer in peers {
             let recordID = UUID()
@@ -52,7 +55,8 @@ final class SendFileUseCase {
 
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                let cachedURLs = await attachmentCache.cache(srcURLs, forRecord: recordID)
+                let names: [String?] = cleanNames
+                let cachedURLs = await attachmentCache.cache(srcURLs, names: names, forRecord: recordID)
                 history.add(TransferRecord(
                     id: recordID,
                     peerEmoji: peer.emojiComponent,
@@ -75,6 +79,19 @@ final class SendFileUseCase {
     }
 
     // MARK: - Private
+
+    /// Strips the iOS file-picker temp prefix `fp_<UUID>_` from a URL's last path component.
+    /// Example: `fp_0E9F2AB0-9A09-46B2-A06F-088F6EA8660E_Report.pdf` → `Report.pdf`
+    private nonisolated static func cleanFileName(_ url: URL) -> String {
+        let raw = url.lastPathComponent
+        // Pattern: fp_ + standard UUID (8-4-4-4-12 hex + hyphens) + _
+        let uuidPattern = "[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}"
+        if let range = raw.range(of: "^fp_\(uuidPattern)_", options: .regularExpression),
+           !raw[range.upperBound...].isEmpty {
+            return String(raw[range.upperBound...])
+        }
+        return raw.isEmpty ? "file" : raw
+    }
 
     private func startProgressPolling() {
         progressPollingTask?.cancel()
