@@ -1,16 +1,5 @@
 import UIKit
 
-private extension UIColor {
-    convenience init(hex: UInt32) {
-        self.init(
-            red:   CGFloat((hex >> 16) & 0xFF) / 255,
-            green: CGFloat((hex >>  8) & 0xFF) / 255,
-            blue:  CGFloat( hex        & 0xFF) / 255,
-            alpha: 1
-        )
-    }
-}
-
 // MARK: - Card view (one contact)
 
 private final class ContactCardView: UIView {
@@ -94,17 +83,6 @@ private final class ContactGradientView: UIView {
 
 final class HistoryContactCell: HistoryBaseCell {
 
-    private static let palette: [UIColor] = [
-        UIColor(hex: 0xD95757), // Red
-        UIColor(hex: 0xD97706), // Orange
-        UIColor(hex: 0xCA8A04), // Yellow
-        UIColor(hex: 0x16A34A), // Green
-        UIColor(hex: 0x0D9488), // Teal
-        UIColor(hex: 0x2563EB), // Blue
-        UIColor(hex: 0x7C3AED), // Purple
-        UIColor(hex: 0xDB2777), // Pink
-        UIColor(hex: 0x64748B), // Slate
-    ]
 
     // Match HistoryMultiItemCell insets exactly.
     private static let scrollLeftInset:   CGFloat = 72
@@ -389,8 +367,6 @@ final class HistoryContactCell: HistoryBaseCell {
     }
 
     private func cardColor(for contact: ContactInfo) -> UIColor {
-        // DJB2 over UTF-8 bytes — stable across devices and process restarts.
-        let hash = contact.name.utf8.reduce(5381) { ($0 &* 31) &+ $0 &+ Int($1) }
-        return Self.palette[abs(hash) % Self.palette.count]
+        contact.colorCode.uiColor
     }
 }

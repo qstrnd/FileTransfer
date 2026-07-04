@@ -119,9 +119,8 @@ final class HistoryMultiItemCell: HistoryBaseCell {
             } else {
                 widthConstraint = itemView.widthAnchor.constraint(equalToConstant: Self.fixedItemSize)
             }
-            widthConstraint.isActive = true
-
             thumbsStack.addArrangedSubview(itemView)
+            widthConstraint.isActive = true
             imageViews.append(imageView)
 
             loadTasks.append(Task { @MainActor [weak self] in

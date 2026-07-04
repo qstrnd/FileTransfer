@@ -7,6 +7,11 @@ struct ReceivedContactAlert: View {
 
     private let cardCornerRadius: CGFloat = 20
 
+    private func initials(for name: String) -> String {
+        name.split(separator: " ").prefix(2)
+            .compactMap(\.first).map(String.init).joined()
+    }
+
     var body: some View {
         ZStack {
             if transfer != nil {
@@ -99,12 +104,12 @@ struct ReceivedContactAlert: View {
     private func contactRow(_ contact: ContactItem) -> some View {
         HStack(alignment: .center, spacing: 12) {
             Circle()
-                .fill(.tint.opacity(0.15))
+                .fill(ContactColor.assigned(for: contact.displayName).swiftUIColor)
                 .frame(width: 44, height: 44)
                 .overlay {
-                    Text(contact.displayName.prefix(1).uppercased())
+                    Text(initials(for: contact.displayName))
                         .font(.headline)
-                        .foregroundStyle(.tint)
+                        .foregroundStyle(.white)
                 }
 
             VStack(alignment: .leading, spacing: 2) {
