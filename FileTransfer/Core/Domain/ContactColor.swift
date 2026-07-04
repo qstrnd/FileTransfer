@@ -29,6 +29,8 @@ enum ContactColor: Int, Codable, CaseIterable, Sendable {
     }
 
     var swiftUIColor: Color { Color(uiColor: uiColor) }
+    var backgroundUIColor: UIColor { uiColor.withAlphaComponent(0.15) }
+    var backgroundSwiftUIColor: Color { swiftUIColor.opacity(0.15) }
 
     // DJB2 over UTF-8 bytes — stable across devices and process restarts.
     static func assigned(for name: String) -> ContactColor {

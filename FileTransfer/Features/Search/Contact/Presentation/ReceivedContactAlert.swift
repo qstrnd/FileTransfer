@@ -104,12 +104,12 @@ struct ReceivedContactAlert: View {
     private func contactRow(_ contact: ContactItem) -> some View {
         HStack(alignment: .center, spacing: 12) {
             Circle()
-                .fill(ContactColor.assigned(for: contact.displayName).swiftUIColor)
+                .fill(ContactColor.assigned(for: contact.displayName).backgroundSwiftUIColor)
                 .frame(width: 44, height: 44)
                 .overlay {
                     Text(initials(for: contact.displayName))
                         .font(.headline)
-                        .foregroundStyle(.white)
+                        .foregroundStyle(ContactColor.assigned(for: contact.displayName).swiftUIColor)
                 }
 
             VStack(alignment: .leading, spacing: 2) {

@@ -5,18 +5,18 @@ import UIKit
 private final class ContactCardView: UIView {
     let circleView = UIView()
 
-    init(contact: ContactInfo, color: UIColor) {
+    init(contact: ContactInfo, colorCode: ContactColor) {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
 
-        circleView.backgroundColor = color
+        circleView.backgroundColor = colorCode.backgroundUIColor
         circleView.clipsToBounds = true
         circleView.translatesAutoresizingMaskIntoConstraints = false
 
         let initialsLabel = UILabel()
         initialsLabel.text = contact.initials
         initialsLabel.font = .systemFont(ofSize: 20, weight: .semibold)
-        initialsLabel.textColor = .white
+        initialsLabel.textColor = colorCode.uiColor
         initialsLabel.textAlignment = .center
         initialsLabel.translatesAutoresizingMaskIntoConstraints = false
         circleView.addSubview(initialsLabel)
@@ -326,8 +326,9 @@ final class HistoryContactCell: HistoryBaseCell {
     }
 
     private func configureSingle(_ contact: ContactInfo) {
-        let color = cardColor(for: contact)
-        singleCircle.backgroundColor = color
+        let cc = contact.colorCode
+        singleCircle.backgroundColor = cc.backgroundUIColor
+        singleInitials.textColor = cc.uiColor
         singleInitials.text = contact.initials
         singleName.text = contact.name
         singlePhone.text = contact.phone
@@ -336,7 +337,7 @@ final class HistoryContactCell: HistoryBaseCell {
 
     private func configureMulti(_ contacts: [ContactInfo]) {
         for contact in contacts {
-            let card = ContactCardView(contact: contact, color: cardColor(for: contact))
+            let card = ContactCardView(contact: contact, colorCode: contact.colorCode)
             card.widthAnchor.constraint(equalToConstant: Self.cardWidth).isActive = true
             cardStack.addArrangedSubview(card)
         }
@@ -366,7 +367,4 @@ final class HistoryContactCell: HistoryBaseCell {
         return result
     }
 
-    private func cardColor(for contact: ContactInfo) -> UIColor {
-        contact.colorCode.uiColor
-    }
 }
