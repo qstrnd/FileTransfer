@@ -1,25 +1,52 @@
 import UIKit
 
+// MARK: - Avatar (photo, falling back to initials-on-color)
+
+/// Shows the contact's actual photo when one was shared; falls back to an
+/// initials-on-color circle otherwise. `photoView` and `initialsLabel` must
+/// already be added to `circleView`.
+private func configureAvatar(
+    circleView: UIView, photoView: UIImageView, initialsLabel: UILabel, contact: ContactInfo
+) {
+    if let data = contact.photoData, let image = UIImage(data: data) {
+        photoView.image = image
+        photoView.isHidden = false
+        initialsLabel.isHidden = true
+        circleView.backgroundColor = .clear
+    } else {
+        photoView.isHidden = true
+        photoView.image = nil
+        initialsLabel.isHidden = false
+        initialsLabel.text = contact.initials
+        initialsLabel.textColor = contact.colorCode.uiColor
+        circleView.backgroundColor = contact.colorCode.backgroundUIColor
+    }
+}
+
 // MARK: - Card view (one contact)
 
 private final class ContactCardView: UIView {
     let circleView = UIView()
 
-    init(contact: ContactInfo, colorCode: ContactColor) {
+    init(contact: ContactInfo) {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
 
-        circleView.backgroundColor = colorCode.backgroundUIColor
         circleView.clipsToBounds = true
         circleView.translatesAutoresizingMaskIntoConstraints = false
 
+        let photoView = UIImageView()
+        photoView.contentMode = .scaleAspectFill
+        photoView.translatesAutoresizingMaskIntoConstraints = false
+        circleView.addSubview(photoView)
+
         let initialsLabel = UILabel()
-        initialsLabel.text = contact.initials
         initialsLabel.font = .systemFont(ofSize: 20, weight: .semibold)
-        initialsLabel.textColor = colorCode.uiColor
         initialsLabel.textAlignment = .center
         initialsLabel.translatesAutoresizingMaskIntoConstraints = false
         circleView.addSubview(initialsLabel)
+
+        configureAvatar(circleView: circleView, photoView: photoView, initialsLabel: initialsLabel, contact: contact)
 
         let nameLabel = UILabel()
         nameLabel.text = contact.name
@@ -37,6 +64,11 @@ private final class ContactCardView: UIView {
             circleView.leadingAnchor.constraint(equalTo: leadingAnchor),
             circleView.trailingAnchor.constraint(equalTo: trailingAnchor),
             circleView.heightAnchor.constraint(equalTo: circleView.widthAnchor),
+
+            photoView.topAnchor.constraint(equalTo: circleView.topAnchor),
+            photoView.bottomAnchor.constraint(equalTo: circleView.bottomAnchor),
+            photoView.leadingAnchor.constraint(equalTo: circleView.leadingAnchor),
+            photoView.trailingAnchor.constraint(equalTo: circleView.trailingAnchor),
 
             initialsLabel.centerXAnchor.constraint(equalTo: circleView.centerXAnchor),
             initialsLabel.centerYAnchor.constraint(equalTo: circleView.centerYAnchor),
@@ -108,6 +140,13 @@ final class HistoryContactCell: HistoryBaseCell {
         v.clipsToBounds = true
         v.translatesAutoresizingMaskIntoConstraints = false
         return v
+    }()
+
+    private let singlePhoto: UIImageView = {
+        let iv = UIImageView()
+        iv.contentMode = .scaleAspectFill
+        iv.translatesAutoresizingMaskIntoConstraints = false
+        return iv
     }()
 
     private let singleInitials: UILabel = {
@@ -208,6 +247,7 @@ final class HistoryContactCell: HistoryBaseCell {
     private func setupLayouts() {
         // ── Single layout (in contentContainer) ──────────────────────────────
         singleLayout.translatesAutoresizingMaskIntoConstraints = false
+        singleCircle.addSubview(singlePhoto)
         singleCircle.addSubview(singleInitials)
         singleLayout.addSubview(singleCircle)
         singleLayout.addSubview(singleName)
@@ -228,6 +268,11 @@ final class HistoryContactCell: HistoryBaseCell {
             singleCircle.leadingAnchor.constraint(equalTo: singleLayout.leadingAnchor),
             singleCircle.widthAnchor.constraint(equalToConstant: circleSize),
             singleCircle.heightAnchor.constraint(equalToConstant: circleSize),
+
+            singlePhoto.topAnchor.constraint(equalTo: singleCircle.topAnchor),
+            singlePhoto.bottomAnchor.constraint(equalTo: singleCircle.bottomAnchor),
+            singlePhoto.leadingAnchor.constraint(equalTo: singleCircle.leadingAnchor),
+            singlePhoto.trailingAnchor.constraint(equalTo: singleCircle.trailingAnchor),
 
             singleInitials.centerXAnchor.constraint(equalTo: singleCircle.centerXAnchor),
             singleInitials.centerYAnchor.constraint(equalTo: singleCircle.centerYAnchor),
@@ -332,10 +377,7 @@ final class HistoryContactCell: HistoryBaseCell {
     }
 
     private func configureSingle(_ contact: ContactInfo) {
-        let cc = contact.colorCode
-        singleCircle.backgroundColor = cc.backgroundUIColor
-        singleInitials.textColor = cc.uiColor
-        singleInitials.text = contact.initials
+        configureAvatar(circleView: singleCircle, photoView: singlePhoto, initialsLabel: singleInitials, contact: contact)
         singleName.text = contact.name
         singlePhone.text = contact.phone
         singlePhone.isHidden = contact.phone == nil
@@ -343,7 +385,7 @@ final class HistoryContactCell: HistoryBaseCell {
 
     private func configureMulti(_ contacts: [ContactInfo]) {
         for contact in contacts {
-            let card = ContactCardView(contact: contact, colorCode: contact.colorCode)
+            let card = ContactCardView(contact: contact)
             card.widthAnchor.constraint(equalToConstant: Self.cardWidth).isActive = true
             cardStack.addArrangedSubview(card)
         }

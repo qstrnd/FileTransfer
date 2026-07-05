@@ -15,7 +15,12 @@ final class SendContactUseCase {
 
     func send(_ contacts: [CNContact], to peers: [Peer]) {
         guard !contacts.isEmpty, !peers.isEmpty else { return }
-        guard let vCardData = try? CNContactVCardSerialization.data(with: contacts) else { return }
+
+        // Downsize any contact photo before it's embedded in the vCard, so a
+        // full-resolution Contacts photo doesn't bloat the nearby-session payload.
+        let photos = contacts.map(downsizedPhoto)
+        let wireContacts = zip(contacts, photos).map { wireContact(for: $0, photo: $1) }
+        guard let vCardData = try? CNContactVCardSerialization.data(with: wireContacts) else { return }
 
         let displayName: String
         if contacts.count == 1 {
@@ -26,9 +31,9 @@ final class SendContactUseCase {
 
         outgoingTransfer = OutgoingContactTransfer(totalItems: contacts.count, peerCount: peers.count)
 
-        let contactInfos = contacts.map { contact in
+        let contactInfos = zip(contacts, photos).map { contact, photo in
             let name = CNContactFormatter.string(from: contact, style: .fullName) ?? "Contact"
-            return ContactInfo(name: name, phone: contact.phoneNumbers.first?.value.stringValue)
+            return ContactInfo(name: name, phone: contact.phoneNumbers.first?.value.stringValue, photoData: photo)
         }
 
         for peer in peers {
@@ -52,5 +57,19 @@ final class SendContactUseCase {
 
     func abort() {
         outgoingTransfer = nil
+    }
+
+    // MARK: - Photo
+
+    private func downsizedPhoto(for contact: CNContact) -> Data? {
+        guard contact.isKeyAvailable(CNContactImageDataKey),
+              let original = contact.imageData else { return nil }
+        return ContactPhoto.downsized(original)
+    }
+
+    private func wireContact(for contact: CNContact, photo: Data?) -> CNContact {
+        guard let photo, let mutable = contact.mutableCopy() as? CNMutableContact else { return contact }
+        mutable.imageData = photo
+        return mutable
     }
 }

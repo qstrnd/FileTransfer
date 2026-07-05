@@ -46,6 +46,14 @@ private final class PreviewThumbnailGate: HistoryThumbnailGate, @unchecked Senda
 
 private func url(_ name: String) -> URL { URL(string: "file:///preview/\(name)")! }
 
+private func previewContactPhoto(_ color: UIColor) -> Data {
+    let renderer = UIGraphicsImageRenderer(size: CGSize(width: 120, height: 120))
+    return renderer.jpegData(withCompressionQuality: 0.9) { ctx in
+        color.setFill()
+        ctx.fill(CGRect(x: 0, y: 0, width: 120, height: 120))
+    }
+}
+
 private func records() -> [TransferRecord] {
     let cal = Calendar.current
     let now = Date.now
@@ -69,14 +77,15 @@ private func records() -> [TransferRecord] {
             peerEmoji: "🐟", peerName: "Fish",
             date: now,
             direction: .sent, type: .contact,
-            contacts: [ContactInfo(name: "Ljiljana Marković", phone: "+49 151 2240 88")]
+            contacts: [ContactInfo(name: "Ljiljana Marković", phone: "+49 151 2240 88",
+                                    photoData: previewContactPhoto(.systemOrange))]
         ),
         TransferRecord(
             peerEmoji: "🐟", peerName: "Fish",
             date: now,
             direction: .sent, type: .contact,
             contacts: [
-                ContactInfo(name: "Ljiljana Marković", phone: nil),
+                ContactInfo(name: "Ljiljana Marković", phone: nil, photoData: previewContactPhoto(.systemTeal)),
                 ContactInfo(name: "Jörg Weber", phone: nil),
             ]
         ),

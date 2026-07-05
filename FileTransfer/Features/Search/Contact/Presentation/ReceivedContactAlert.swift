@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ReceivedContactAlert: View {
     let transfer: ReceivedContactTransfer?
@@ -103,14 +104,7 @@ struct ReceivedContactAlert: View {
 
     private func contactRow(_ contact: ContactItem) -> some View {
         HStack(alignment: .center, spacing: 12) {
-            Circle()
-                .fill(ContactColor.assigned(for: contact.displayName).backgroundSwiftUIColor)
-                .frame(width: 44, height: 44)
-                .overlay {
-                    Text(initials(for: contact.displayName))
-                        .font(.headline)
-                        .foregroundStyle(ContactColor.assigned(for: contact.displayName).swiftUIColor)
-                }
+            avatar(for: contact)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(contact.displayName)
@@ -130,11 +124,43 @@ struct ReceivedContactAlert: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
     }
+
+    // MARK: - Avatar
+
+    /// Uses the sender's actual contact photo when one was shared; falls back
+    /// to an initials-on-color circle otherwise.
+    @ViewBuilder
+    private func avatar(for contact: ContactItem) -> some View {
+        if let data = contact.photoData, let uiImage = UIImage(data: data) {
+            Image(uiImage: uiImage)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 44, height: 44)
+                .clipShape(Circle())
+        } else {
+            Circle()
+                .fill(ContactColor.assigned(for: contact.displayName).backgroundSwiftUIColor)
+                .frame(width: 44, height: 44)
+                .overlay {
+                    Text(initials(for: contact.displayName))
+                        .font(.headline)
+                        .foregroundStyle(ContactColor.assigned(for: contact.displayName).swiftUIColor)
+                }
+        }
+    }
 }
 
 // MARK: - Previews
 
 #if DEBUG
+private func previewPhoto(_ color: UIColor) -> Data {
+    let renderer = UIGraphicsImageRenderer(size: CGSize(width: 120, height: 120))
+    return renderer.jpegData(withCompressionQuality: 0.9) { ctx in
+        color.setFill()
+        ctx.fill(CGRect(x: 0, y: 0, width: 120, height: 120))
+    }
+}
+
 #Preview("Received — single contact") {
     let transfer = ReceivedContactTransfer(
         senderName: "🦒 Cunning Giraffe",
@@ -154,6 +180,21 @@ struct ReceivedContactAlert: View {
             ContactItem(displayName: "Alice Johnson", phoneNumbers: ["+1 555 000 1111"], emailAddresses: []),
             ContactItem(displayName: "Bob Martinez", phoneNumbers: [], emailAddresses: ["bob@example.com"]),
             ContactItem(displayName: "Carol White", phoneNumbers: ["+44 20 1234 5678"], emailAddresses: ["carol@example.com"]),
+        ],
+        vCardData: Data()
+    )
+    ZStack {
+        Color(.systemGroupedBackground).ignoresSafeArea()
+        ReceivedContactAlert(transfer: transfer, onDismiss: {}, onShare: { _ in })
+    }
+}
+
+#Preview("Received — with photo") {
+    let transfer = ReceivedContactTransfer(
+        senderName: "🦊 Fox",
+        contacts: [
+            ContactItem(displayName: "Jane Smith", phoneNumbers: ["+1 555 123 4567"], emailAddresses: [], photoData: previewPhoto(.systemOrange)),
+            ContactItem(displayName: "No Photo Guy", phoneNumbers: ["+1 555 999 0000"], emailAddresses: []),
         ],
         vCardData: Data()
     )

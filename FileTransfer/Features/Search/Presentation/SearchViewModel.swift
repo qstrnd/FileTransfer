@@ -590,12 +590,15 @@ extension SearchViewModel: PeerSessionEvents {
             let displayName = CNContactFormatter.string(from: contact, style: .fullName) ?? "Unknown"
             let phones = contact.phoneNumbers.map { $0.value.stringValue }
             let emails = contact.emailAddresses.map { $0.value as String }
-            return ContactItem(displayName: displayName, phoneNumbers: phones, emailAddresses: emails)
+            let photo = contact.isKeyAvailable(CNContactImageDataKey) ? contact.imageData : nil
+            return ContactItem(displayName: displayName, phoneNumbers: phones, emailAddresses: emails, photoData: photo)
         }
 
         let (emoji, name) = Peer.parseDisplayName(peer.displayName)
         let detail = contactItems.count == 1 ? contactItems[0].displayName : "\(contactItems.count) contacts"
-        let contactInfos = contactItems.map { ContactInfo(name: $0.displayName, phone: $0.phoneNumbers.first) }
+        let contactInfos = contactItems.map {
+            ContactInfo(name: $0.displayName, phone: $0.phoneNumbers.first, photoData: $0.photoData)
+        }
         addRecord(TransferRecord(
             peerEmoji: emoji, peerName: name,
             direction: .received, type: .contact, detail: detail,
