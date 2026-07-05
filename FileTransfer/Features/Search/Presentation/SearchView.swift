@@ -11,7 +11,6 @@ struct SearchView: View {
     @State private var showMediaPicker = false
     @State private var showContactPicker = false
     @State private var didBackground = false
-    @State private var showCopiedToast = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
@@ -39,9 +38,7 @@ struct SearchView: View {
                 portraitLayout(maxSheetWidth: portraitMaxSheetWidth)
             }
         }
-        .background(PinnedToast(peer: viewModel.disconnectedPeer))
-        .background(PinnedToast(peer: viewModel.reconnectedPeer, message: "is connected"))
-        .background(PinnedToast(peer: nil, staticMessage: viewModel.connectionsRestored ? "Connections are restored" : nil))
+        .background(ToastHost())
         .background(PinnedWindow(
             content: InvitationAlert(
                 peer: viewModel.pendingInvitationFrom,
@@ -56,7 +53,7 @@ struct SearchView: View {
             content: ReceivedTextAlert(
                 message: viewModel.receivedMessage,
                 onDismiss: { viewModel.receivedMessage = nil },
-                onCopied: { showCopiedTextToast() }
+                onCopied: { ToastCenter.shared.show { CopiedToast() } }
             ),
             isVisible: viewModel.receivedMessage != nil,
             isInteractive: true,
@@ -65,17 +62,16 @@ struct SearchView: View {
             // scene's key window — without this it renders behind this overlay.
             becomesKey: true
         ))
-        .background(PinnedWindow(
-            content: CopiedToast(),
-            isVisible: showCopiedToast,
-            windowLevel: .alert + 1,
-            isInteractive: false,
-            hideDelay: 0.3
-        ))
-        .background(PinnedReceivingToast(
-            progress: viewModel.receivingMediaTransfer?.receivingProgress
-                ?? viewModel.receivingFileTransfer?.receivingProgress
-        ))
+        .onChange(of: viewModel.receivingMediaTransfer?.receivingProgress
+                      ?? viewModel.receivingFileTransfer?.receivingProgress) { _, progress in
+            if let progress {
+                ToastCenter.shared.show(id: "receivingProgress", duration: nil) {
+                    ReceivingToastCapsule(progress: progress)
+                }
+            } else {
+                ToastCenter.shared.hide(id: "receivingProgress")
+            }
+        }
         .background(PinnedWindow(
             content: ReceivedMediaAlert(
                 transfer: viewModel.receivedMedia,
@@ -207,18 +203,6 @@ struct SearchView: View {
             default:
                 break
             }
-        }
-    }
-
-    // MARK: - Copied-text toast
-
-    private func showCopiedTextToast() {
-        Task { @MainActor in
-            // Brief pause so the alert card's exit animation leads; then the toast slides in.
-            try? await Task.sleep(for: .milliseconds(150))
-            showCopiedToast = true
-            try? await Task.sleep(for: .seconds(2))
-            showCopiedToast = false
         }
     }
 

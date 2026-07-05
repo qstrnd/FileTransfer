@@ -18,8 +18,6 @@ final class SearchViewModel {
     var expiredInvitationFrom: Peer? = nil
     /// Set when a text message arrives; cleared when the user dismisses the alert.
     var receivedMessage: TransferMessage? = nil
-    /// Set briefly when a previously-connected peer drops without us initiating.
-    var disconnectedPeer: Peer? = nil
     /// Tracks an in-progress incoming media transfer; updated as items arrive.
     var receivingMediaTransfer: IncomingMediaTransfer? = nil
     /// Set when all items of a media transfer arrive; cleared when user dismisses.
@@ -39,11 +37,6 @@ final class SearchViewModel {
     /// Live transfer history — reads directly from the @Observable store.
     var transferHistory: [TransferRecord] { historyStore.records }
 
-    /// Set briefly when a peer auto-reconnects; the receiving side sees their name.
-    var reconnectedPeer: Peer? = nil
-    /// Set briefly when our own connections are restored after going to the foreground.
-    var connectionsRestored: Bool = false
-
     var connectedPeers: [Peer] { peerStates.filter { $0.value == .connected }.map(\.key) }
     var hasConnectedPeers: Bool { !connectedPeers.isEmpty }
 
@@ -62,6 +55,7 @@ final class SearchViewModel {
     private let sendContactUseCase: SendContactUseCase
     private let sendFileUseCase: SendFileUseCase
     let fileSaveService = FileSaveService()
+    private let toastCenter: any ToastPresenting
 
     /// Tracks peers we invited with isReconnect=true so peerConnected can show the toast.
     private var reconnectingPeers: Set<Peer.ID> = []
@@ -95,6 +89,7 @@ final class SearchViewModel {
         mediaSavingGate: any MediaSavingGate = MediaSaveService(),
         thumbnailGate: any ThumbnailGate = MediaThumbnailService(),
         historyThumbnailGate: any HistoryThumbnailGate = HistoryThumbnailService(),
+        toastCenter: any ToastPresenting = ToastCenter.shared,
         onBack: @escaping () -> Void
     ) {
         self.emoji = emoji
@@ -107,6 +102,7 @@ final class SearchViewModel {
         self.mediaSavingGate = mediaSavingGate
         self.thumbnailGate = thumbnailGate
         self.historyThumbnailGate = historyThumbnailGate
+        self.toastCenter = toastCenter
         self.onBack = onBack
         self.sendMediaUseCase = SendMediaUseCase(
             session: service, history: historyStore, attachmentCache: attachmentCache
@@ -323,19 +319,15 @@ final class SearchViewModel {
 
     /// Shows the per-peer "NAME is connected" toast — for the receiving side of a reconnect.
     private func showReconnectedPeerToast(for peer: Peer) {
-        withAnimation { reconnectedPeer = peer }
-        Task {
-            try? await Task.sleep(for: .seconds(3))
-            withAnimation { if reconnectedPeer == peer { reconnectedPeer = nil } }
+        toastCenter.show(id: "reconnectedPeer", duration: 3) {
+            PeerToastCapsule(peer: peer, message: "is connected")
         }
     }
 
     /// Shows the generic "Connections are restored" toast — for the initiating side.
     private func showConnectionsRestoredToast() {
-        withAnimation { connectionsRestored = true }
-        Task {
-            try? await Task.sleep(for: .seconds(3))
-            withAnimation { connectionsRestored = false }
+        toastCenter.show(id: "connectionsRestored", duration: 3) {
+            TextToastCapsule(text: "Connections are restored")
         }
     }
 
@@ -482,10 +474,8 @@ extension SearchViewModel: PeerSessionEvents {
         // non-.connected state before service.disconnect() is called, so by the
         // time this delegate fires current is already the post-transition value.
         if current == .connected {
-            withAnimation { disconnectedPeer = peer }
-            Task {
-                try? await Task.sleep(for: .seconds(3))
-                withAnimation { if disconnectedPeer == peer { disconnectedPeer = nil } }
+            toastCenter.show(id: "disconnectedPeer", duration: 3) {
+                PeerToastCapsule(peer: peer, message: "disconnected")
             }
         }
 

@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import SwiftUI
 @testable import FileTransfer
 
 // MARK: - Spy
@@ -27,6 +28,15 @@ private final class SpyNearbyService: NearbySessionService {
     func disconnect(from peer: Peer) { disconnectCalls.append(peer) }
 }
 
+@MainActor
+private final class SpyToastCenter: ToastPresenting {
+    private(set) var shownIDs: [AnyHashable] = []
+    private(set) var hiddenIDs: [AnyHashable?] = []
+
+    func show(id: AnyHashable, duration: TimeInterval?, content: AnyView) { shownIDs.append(id) }
+    func hide(id: AnyHashable?) { hiddenIDs.append(id) }
+}
+
 // MARK: - Tests
 
 @MainActor
@@ -47,6 +57,23 @@ struct SearchViewModelTests {
             onBack: {}
         )
         return (vm, service)
+    }
+
+    private func makeVMWithToast(
+        history: InMemoryConnectionHistoryStore = .init()
+    ) -> (SearchViewModel, SpyNearbyService, SpyToastCenter) {
+        let service = SpyNearbyService()
+        let toastCenter = SpyToastCenter()
+        let vm = SearchViewModel(
+            emoji: "🐟", name: "Fish",
+            deviceID: myDeviceID,
+            service: service,
+            connectionHistory: history,
+            historyStore: .preview,
+            toastCenter: toastCenter,
+            onBack: {}
+        )
+        return (vm, service, toastCenter)
     }
 
     private func peer(_ name: String = "🐟 Fish") -> Peer {
@@ -198,8 +225,8 @@ struct SearchViewModelTests {
         #expect(!vm.discoveredPeers.contains(p), "peer must be evicted once session also drops")
     }
 
-    @Test func peerDisconnected_fromConnectedState_setsDisconnectedPeerForToast() {
-        let (vm, _) = makeVM()
+    @Test func peerDisconnected_fromConnectedState_showsDisconnectedToast() {
+        let (vm, _, toastCenter) = makeVMWithToast()
         let p = peer()
         vm.peerDiscovered(p)
         vm.peerStates[p] = .connecting
@@ -207,7 +234,7 @@ struct SearchViewModelTests {
 
         vm.peerDisconnected(p)
 
-        #expect(vm.disconnectedPeer == p)
+        #expect(toastCenter.shownIDs.contains("disconnectedPeer" as AnyHashable))
     }
 
     // MARK: - invitationReceived
@@ -300,30 +327,28 @@ struct SearchViewModelTests {
         let history = InMemoryConnectionHistoryStore()
         let peerID = UUID()
         history.record(ConnectionRecord(deviceID: peerID, displayName: "🐟 Fish", lastConnected: .now))
-        let (vm, _) = makeVM(history: history)
+        let (vm, _, toastCenter) = makeVMWithToast(history: history)
         let p = Peer(displayName: "🐟 Fish", deviceID: peerID)
 
         vm.start()               // sets isRecentlyLaunched = true for 10 s
         vm.peerDiscovered(p)
         vm.reconnectInvitationReceived(from: p)
 
-        #expect(vm.connectionsRestored == true)
-        #expect(vm.reconnectedPeer == nil)
+        #expect(toastCenter.shownIDs == ["connectionsRestored" as AnyHashable])
     }
 
     @Test func reconnectInvitationReceived_notRecentlyLaunched_showsReconnectedPeerToast() {
         let history = InMemoryConnectionHistoryStore()
         let peerID = UUID()
         history.record(ConnectionRecord(deviceID: peerID, displayName: "🐟 Fish", lastConnected: .now))
-        let (vm, _) = makeVM(history: history)
+        let (vm, _, toastCenter) = makeVMWithToast(history: history)
         let p = Peer(displayName: "🐟 Fish", deviceID: peerID)
 
         // Do NOT call start() → isRecentlyLaunched remains false
         vm.peerDiscovered(p)
         vm.reconnectInvitationReceived(from: p)
 
-        #expect(vm.reconnectedPeer == p)
-        #expect(vm.connectionsRestored == false)
+        #expect(toastCenter.shownIDs == ["reconnectedPeer" as AnyHashable])
     }
 
     // MARK: - handleBackground
