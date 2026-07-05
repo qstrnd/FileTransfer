@@ -38,7 +38,6 @@ struct SearchView: View {
                 portraitLayout(maxSheetWidth: portraitMaxSheetWidth)
             }
         }
-        .overlay(alignment: .topTrailing) { menuButton }
         .background(ToastHost())
         .background(PinnedWindow(
             content: InvitationAlert(
@@ -214,9 +213,9 @@ struct SearchView: View {
             Button("Update Profile") { viewModel.goBack() }
         } label: {
             Image(systemName: "ellipsis")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.primary)
-                .frame(width: 36, height: 36)
+                .frame(width: 30, height: 30)
         }
         .menuStyle(.button)
         .buttonStyle(.glass)
@@ -261,6 +260,7 @@ struct SearchView: View {
                 .animation(.easeInOut(duration: 0.35), value: viewModel.discoveredPeers.isEmpty)
             }
         }
+        .overlay(alignment: .topTrailing) { menuButton }
         .overlay {
             portraitCurtainView(maxSheetWidth: maxSheetWidth).ignoresSafeArea()
         }
@@ -307,6 +307,7 @@ struct SearchView: View {
                     Spacer()
                     Color.clear.frame(height: 208)
                 }
+                .overlay(alignment: .topTrailing) { menuButton }
 
                 // Curtain fills the panel. PassthroughView passes touches
                 // through the transparent area so the hero above remains tappable.
