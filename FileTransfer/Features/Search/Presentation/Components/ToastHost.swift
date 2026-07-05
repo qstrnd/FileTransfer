@@ -99,3 +99,73 @@ struct ToastHost: UIViewRepresentable {
         }
     }
 }
+
+// MARK: - Previews
+
+#if DEBUG
+/// One button per `ToastPresenting.show(...)` call site in the app today —
+/// tap to trigger that exact toast through the real `ToastCenter` → `ToastHost`
+/// pipeline (see SearchViewModel's reconnect/disconnect toasts, SearchView's
+/// copied-to-clipboard and receiving-progress toasts).
+private struct ToastHostPreview: View {
+    var body: some View {
+        ZStack {
+            Color(.systemGroupedBackground).ignoresSafeArea()
+            VStack(spacing: 14) {
+                Text("Tap a button to trigger that toast")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                Button("Peer reconnected") {
+                    ToastCenter.shared.show(id: "reconnectedPeer", duration: 3) {
+                        PeerToastCapsule(peer: Peer(displayName: "🦊 Fox"), message: "is connected")
+                    }
+                }
+
+                Button("Peer disconnected") {
+                    ToastCenter.shared.show(id: "disconnectedPeer", duration: 3) {
+                        PeerToastCapsule(peer: Peer(displayName: "🐨 Koala"), message: "disconnected")
+                    }
+                }
+
+                Button("Connections restored") {
+                    ToastCenter.shared.show(id: "connectionsRestored", duration: 3) {
+                        TextToastCapsule(text: "Connections are restored")
+                    }
+                }
+
+                Button("Copied to clipboard") {
+                    ToastCenter.shared.show { CopiedToast() }
+                }
+
+                Button("Receiving progress (persistent, ticks up)") {
+                    simulateReceivingProgress()
+                }
+            }
+            .buttonStyle(.bordered)
+        }
+        .background(ToastHost())
+    }
+
+    /// Mirrors how SearchView drives the receiving-progress toast: repeated
+    /// `show(id:duration: nil)` calls with the same id update it in place,
+    /// then `hide(id:)` dismisses it once the transfer finishes.
+    private func simulateReceivingProgress() {
+        Task { @MainActor in
+            for count in 1...5 {
+                ToastCenter.shared.show(id: "receivingProgress", duration: nil) {
+                    ReceivingToastCapsule(progress: ReceivingProgress(
+                        id: "demo", senderName: "🦔 Hedgehog", receivedCount: count, totalCount: 5
+                    ))
+                }
+                try? await Task.sleep(for: .seconds(0.6))
+            }
+            ToastCenter.shared.hide(id: "receivingProgress")
+        }
+    }
+}
+
+#Preview("ToastHost — tap to trigger") {
+    ToastHostPreview()
+}
+#endif
