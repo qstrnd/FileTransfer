@@ -86,7 +86,7 @@ struct PinnedWindow<Content: View>: UIViewRepresentable {
             newHost.view.backgroundColor = .clear
 
             let newWindow = UIWindow(windowScene: scene)
-            newWindow.windowLevel = parent.windowLevel
+            newWindow.windowLevel = .normal + 1
             newWindow.backgroundColor = .clear
             newWindow.rootViewController = newHost
             newWindow.isUserInteractionEnabled = parent.isInteractive
