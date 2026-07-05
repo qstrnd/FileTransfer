@@ -58,36 +58,40 @@ struct SendingTransferAlert: View {
 
     private func card(for transfer: SendingTransferStatus) -> some View {
         VStack(spacing: 0) {
-            ZStack {
-                VStack(spacing: 12) {
-                    Text("Sending \(transfer.totalItems) item\(transfer.totalItems == 1 ? "" : "s")")
-                        .font(.title3.weight(.semibold))
-                    Text("to \(transfer.peerCount) device\(transfer.peerCount == 1 ? "" : "s")")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    ProgressView(value: transfer.progress)
-                        .tint(.blue)
-                        .padding(.top, 4)
-                }
-                .frame(maxWidth: .infinity)
-                .opacity(transfer.isComplete ? 0 : 1)
-
-                VStack(spacing: 12) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                        .font(.system(size: 52))
-                    Text("Sent!")
-                        .font(.title2.weight(.semibold))
-                }
-                .frame(maxWidth: .infinity)
-                .opacity(transfer.isComplete ? 1 : 0)
+            if transfer.isComplete {
+                completeContent
+                    .transition(.scale(scale: 0.7).combined(with: .opacity))
+            } else {
+                sendingContent(for: transfer)
+                    .transition(.opacity)
             }
+        }
+        .glassEffect(in: RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
+        .animation(.spring(response: 0.45, dampingFraction: 0.68), value: transfer.isComplete)
+        .frame(maxWidth: 400)
+        .padding(.horizontal, 40)
+    }
+
+    // MARK: - Sending state
+
+    private func sendingContent(for transfer: SendingTransferStatus) -> some View {
+        VStack(spacing: 0) {
+            VStack(spacing: 12) {
+                Text("Sending \(transfer.totalItems) item\(transfer.totalItems == 1 ? "" : "s")")
+                    .font(.title3.weight(.semibold))
+                Text("to \(transfer.peerCount) device\(transfer.peerCount == 1 ? "" : "s")")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                ProgressView(value: transfer.progress)
+                    .tint(.blue)
+                    .padding(.top, 4)
+            }
+            .frame(maxWidth: .infinity)
             .padding(.top, 32)
             .padding(.horizontal, 24)
             .padding(.bottom, 20)
 
             Divider()
-                .opacity(transfer.isComplete ? 0 : 1)
 
             Button(role: .destructive, action: onAbort) {
                 Text("Cancel")
@@ -97,12 +101,78 @@ struct SendingTransferAlert: View {
             }
             .padding(.horizontal, 4)
             .padding(.vertical, 2)
-            .opacity(transfer.isComplete ? 0 : 1)
-            .disabled(transfer.isComplete)
         }
-        .glassEffect(in: RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
-        .animation(.spring(duration: 0.35), value: transfer.isComplete)
-        .frame(maxWidth: 400)
-        .padding(.horizontal, 40)
+    }
+
+    // MARK: - Complete state
+
+    /// Vertically centered within the card — no divider/button below it, so
+    /// the card shrinks to fit and the checkmark+"Sent!" pair sits dead-center.
+    private var completeContent: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+                .font(.system(size: 64))
+            Text("Sent!")
+                .font(.title2.weight(.semibold))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 44)
+        .padding(.horizontal, 24)
     }
 }
+
+// MARK: - Previews
+
+#if DEBUG
+#Preview("Sending — in progress") {
+    ZStack {
+        Color(.systemGroupedBackground).ignoresSafeArea()
+        SendingTransferAlert(
+            transfer: SendingTransferStatus(id: UUID(), totalItems: 5, peerCount: 2, isComplete: false, progress: 0.42),
+            onAbort: {}
+        )
+    }
+}
+
+#Preview("Sending — complete") {
+    ZStack {
+        Color(.systemGroupedBackground).ignoresSafeArea()
+        SendingTransferAlert(
+            transfer: SendingTransferStatus(id: UUID(), totalItems: 5, peerCount: 2, isComplete: true, progress: 1),
+            onAbort: {}
+        )
+    }
+}
+
+/// Loops sending → complete → sending so the pop-in transition for the
+/// "Sent!" state can be watched repeatedly in the canvas.
+#Preview("Sending → Sent (animated)") {
+    SendingTransferAlertAnimationPreview()
+}
+
+private struct SendingTransferAlertAnimationPreview: View {
+    @State private var isComplete = false
+
+    var body: some View {
+        ZStack {
+            Color(.systemGroupedBackground).ignoresSafeArea()
+            SendingTransferAlert(
+                transfer: SendingTransferStatus(
+                    id: UUID(), totalItems: 5, peerCount: 2,
+                    isComplete: isComplete, progress: isComplete ? 1 : 0.65
+                ),
+                onAbort: {}
+            )
+        }
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1.5))
+                withAnimation { isComplete = true }
+                try? await Task.sleep(for: .seconds(2))
+                withAnimation { isComplete = false }
+            }
+        }
+    }
+}
+#endif
