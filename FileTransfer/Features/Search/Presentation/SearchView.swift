@@ -38,6 +38,7 @@ struct SearchView: View {
                 portraitLayout(maxSheetWidth: portraitMaxSheetWidth)
             }
         }
+        .overlay(alignment: .topTrailing) { menuButton }
         .background(ToastHost())
         .background(PinnedWindow(
             content: InvitationAlert(
@@ -204,6 +205,22 @@ struct SearchView: View {
                 break
             }
         }
+    }
+
+    // MARK: - Menu
+
+    private var menuButton: some View {
+        Menu {
+            Button("Update Profile") { viewModel.goBack() }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.primary)
+                .frame(width: 36, height: 36)
+                .glassEffect(in: Circle())
+        }
+        .padding(.top, 8)
+        .padding(.trailing, 20)
     }
 
     // MARK: - Layouts
