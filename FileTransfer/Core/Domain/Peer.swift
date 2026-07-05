@@ -1,6 +1,6 @@
 import Foundation
 
-struct Peer: Sendable, Identifiable, Hashable {
+struct Peer: Sendable, Identifiable, Hashable, Codable {
     let displayName: String
     /// Stable UUID advertised by the remote device via MPC discoveryInfo.
     /// `nil` when connecting to a legacy peer that doesn't include one.

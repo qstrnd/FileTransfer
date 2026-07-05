@@ -20,6 +20,10 @@ final class TransferItem {
     var fileBytes: Int64?
     /// JSON-encoded array of ContactInfo for contact transfers; nil for all other types.
     var contactsJSON: String?
+    /// JSON-encoded array of every recipient/sender in this transfer (supports group shares).
+    /// Nil for records persisted before multi-peer support — asRecord falls back to
+    /// peerEmoji/peerName (the single-peer behavior those older rows were saved with).
+    var peersJSON: String?
 
     init(from record: TransferRecord) {
         self.id        = record.id
@@ -60,6 +64,11 @@ final class TransferItem {
            let data = try? JSONEncoder().encode(record.contacts),
            let json = String(data: data, encoding: .utf8) {
             self.contactsJSON = json
+        }
+
+        if let data = try? JSONEncoder().encode(record.peers),
+           let json = String(data: data, encoding: .utf8) {
+            self.peersJSON = json
         }
     }
 
@@ -103,8 +112,18 @@ final class TransferItem {
             contacts = decoded
         }
 
+        var peers: [Peer] = []
+        if let json = peersJSON,
+           let data = json.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode([Peer].self, from: data),
+           !decoded.isEmpty {
+            peers = decoded
+        } else {
+            peers = [Peer(displayName: "\(peerEmoji) \(peerName)")]
+        }
+
         return TransferRecord(
-            id: id, peerEmoji: peerEmoji, peerName: peerName,
+            id: id, peers: peers,
             date: date, direction: direction, type: type, detail: detail,
             attachmentURLs: attachmentURLs, fileBytes: fileBytes,
             contacts: contacts
