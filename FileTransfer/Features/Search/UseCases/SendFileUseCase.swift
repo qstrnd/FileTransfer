@@ -39,9 +39,9 @@ final class SendFileUseCase {
         let srcURLs = urls
         let totalBytes = attachmentCache.fileBytes(for: srcURLs)
         let detail = total == 1 ? cleanNames[0] : "\(total) files"
+        let recordID = UUID()
 
         for peer in peers {
-            let recordID = UUID()
             let progresses = session.sendFiles(files, to: peer) { [weak self] in
                 self?.outgoingTransfer?.recordCompletion()
                 if self?.outgoingTransfer?.isComplete == true {
@@ -52,22 +52,21 @@ final class SendFileUseCase {
                 }
             }
             activeProgresses.append(contentsOf: progresses)
+        }
 
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                let names: [String?] = cleanNames
-                let cachedURLs = await attachmentCache.cache(srcURLs, names: names, forRecord: recordID)
-                history.add(TransferRecord(
-                    id: recordID,
-                    peerEmoji: peer.emojiComponent,
-                    peerName: peer.nameComponent,
-                    direction: .sent,
-                    type: .file,
-                    detail: detail,
-                    attachmentURLs: cachedURLs,
-                    fileBytes: totalBytes > 0 ? totalBytes : nil
-                ))
-            }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let names: [String?] = cleanNames
+            let cachedURLs = await attachmentCache.cache(srcURLs, names: names, forRecord: recordID)
+            history.add(TransferRecord(
+                id: recordID,
+                peers: peers,
+                direction: .sent,
+                type: .file,
+                detail: detail,
+                attachmentURLs: cachedURLs,
+                fileBytes: totalBytes > 0 ? totalBytes : nil
+            ))
         }
     }
 

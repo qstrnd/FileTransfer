@@ -33,15 +33,14 @@ final class SendContactUseCase {
 
         for peer in peers {
             session.sendContact(data: vCardData, to: peer)
-            history.add(TransferRecord(
-                peerEmoji: peer.emojiComponent,
-                peerName: peer.nameComponent,
-                direction: .sent,
-                type: .contact,
-                detail: displayName,
-                contacts: contactInfos
-            ))
         }
+        history.add(TransferRecord(
+            peers: peers,
+            direction: .sent,
+            type: .contact,
+            detail: displayName,
+            contacts: contactInfos
+        ))
 
         Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(400))

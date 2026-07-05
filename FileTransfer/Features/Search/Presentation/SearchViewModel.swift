@@ -233,16 +233,17 @@ final class SearchViewModel {
     func sendText(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        for peer in connectedPeers {
+        let peers = connectedPeers
+        guard !peers.isEmpty else { return }
+        for peer in peers {
             service.send(text: trimmed, to: peer)
-            addRecord(TransferRecord(
-                peerEmoji: peer.emojiComponent,
-                peerName: peer.nameComponent,
-                direction: .sent,
-                type: .text,
-                detail: trimmed
-            ))
         }
+        addRecord(TransferRecord(
+            peers: peers,
+            direction: .sent,
+            type: .text,
+            detail: trimmed
+        ))
     }
 
     func sendMedia(_ items: [MediaItem]) {

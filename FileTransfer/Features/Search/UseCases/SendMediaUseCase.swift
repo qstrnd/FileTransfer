@@ -61,9 +61,9 @@ final class SendMediaUseCase {
         let detail = items.count == 1
             ? (items[0].fileName ?? "1 photo")
             : "\(items.count) photos"
+        let recordID = UUID()
 
         for peer in peers {
-            let recordID = UUID()
             let progresses = session.sendMedia(files, to: peer) { [weak self] in
                 self?.outgoingTransfer?.recordCompletion()
                 if self?.outgoingTransfer?.isComplete == true {
@@ -74,26 +74,25 @@ final class SendMediaUseCase {
                 }
             }
             activeProgresses.append(contentsOf: progresses)
+        }
 
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                let names: [String?] = items.map { item in
-                    guard let base = item.fileName else { return nil }
-                    let ext = item.fileURL.pathExtension.lowercased()
-                    return ext.isEmpty ? base : "\(base).\(ext)"
-                }
-                let cachedURLs = await attachmentCache.cache(srcURLs, names: names, forRecord: recordID)
-                history.add(TransferRecord(
-                    id: recordID,
-                    peerEmoji: peer.emojiComponent,
-                    peerName: peer.nameComponent,
-                    direction: .sent,
-                    type: .photo,
-                    detail: detail,
-                    attachmentURLs: cachedURLs,
-                    fileBytes: totalBytes > 0 ? totalBytes : nil
-                ))
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let names: [String?] = items.map { item in
+                guard let base = item.fileName else { return nil }
+                let ext = item.fileURL.pathExtension.lowercased()
+                return ext.isEmpty ? base : "\(base).\(ext)"
             }
+            let cachedURLs = await attachmentCache.cache(srcURLs, names: names, forRecord: recordID)
+            history.add(TransferRecord(
+                id: recordID,
+                peers: peers,
+                direction: .sent,
+                type: .photo,
+                detail: detail,
+                attachmentURLs: cachedURLs,
+                fileBytes: totalBytes > 0 ? totalBytes : nil
+            ))
         }
     }
 

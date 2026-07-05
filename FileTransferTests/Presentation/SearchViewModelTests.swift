@@ -15,11 +15,12 @@ private final class SpyNearbyService: NearbySessionService {
     private(set) var pingCalls: [Peer] = []
     private(set) var disconnectCalls: [Peer] = []
     private(set) var connectCalls: [(peer: Peer, isReconnect: Bool)] = []
+    private(set) var sendTextCalls: [(text: String, peer: Peer)] = []
 
     func start(displayName: String, deviceID: UUID) { startCallCount += 1 }
     func stop() { stopCallCount += 1 }
     func connect(to peer: Peer, isReconnect: Bool) { connectCalls.append((peer, isReconnect)) }
-    func send(text: String, to peer: Peer) {}
+    func send(text: String, to peer: Peer) { sendTextCalls.append((text, peer)) }
     func acceptInvitation() { acceptCallCount += 1 }
     func declineInvitation() { declineCallCount += 1 }
     func sendPing(to peer: Peer) { pingCalls.append(peer) }
@@ -355,6 +356,50 @@ struct SearchViewModelTests {
         vm.handleBackground()
 
         #expect(vm.pendingInvitationFrom == nil)
+    }
+
+    // MARK: - sendText
+
+    @Test func sendText_multipleConnectedPeers_createsSingleRecordWithAllPeers() {
+        let (vm, service) = makeVM()
+        let p1 = peer("🐟 Fish")
+        let p2 = peer("🦊 Fox")
+        vm.peerStates[p1] = .connected
+        vm.peerStates[p2] = .connected
+
+        vm.sendText("Hello there!")
+
+        #expect(vm.transferHistory.count == 1, "sending to multiple peers must create one history entry, not one per peer")
+        #expect(vm.transferHistory.first?.peers.count == 2)
+        #expect(service.sendTextCalls.count == 2, "the message must still be sent to every connected peer individually")
+    }
+
+    @Test func sendText_singleConnectedPeer_createsRecordWithThatPeer() {
+        let (vm, _) = makeVM()
+        let p = peer("🐟 Fish")
+        vm.peerStates[p] = .connected
+
+        vm.sendText("Hello there!")
+
+        #expect(vm.transferHistory.count == 1)
+        #expect(vm.transferHistory.first?.peers == [p])
+    }
+
+    @Test func sendText_noConnectedPeers_addsNoRecord() {
+        let (vm, _) = makeVM()
+
+        vm.sendText("Hello there!")
+
+        #expect(vm.transferHistory.isEmpty)
+    }
+
+    @Test func sendText_blankText_addsNoRecord() {
+        let (vm, _) = makeVM()
+        vm.peerStates[peer()] = .connected
+
+        vm.sendText("   ")
+
+        #expect(vm.transferHistory.isEmpty)
     }
 
     // MARK: - Keepalive (5 s ping interval, 15 s disconnect threshold)
