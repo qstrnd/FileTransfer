@@ -217,8 +217,10 @@ struct SearchView: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.primary)
                 .frame(width: 36, height: 36)
-                .glassEffect(in: Circle())
         }
+        .menuStyle(.button)
+        .buttonStyle(.glass)
+        .buttonBorderShape(.circle)
         .padding(.top, 8)
         .padding(.trailing, 20)
     }
