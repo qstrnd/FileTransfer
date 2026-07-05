@@ -114,7 +114,7 @@ extension TransferCurtainViewController {
         }
 
         dataSource.apply(snap, animatingDifferences: true)
-        emptyLabel.isHidden = !history.isEmpty
+        emptyStateView.isHidden = !history.isEmpty
     }
 
     func makeHistoryLayout() -> UICollectionViewLayout {

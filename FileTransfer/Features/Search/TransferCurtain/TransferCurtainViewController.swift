@@ -68,7 +68,7 @@ final class TransferCurtainViewController: UIViewController {
     let headerView = UIView()
     let historyHeaderView = UIView()
     let hintLabel = UILabel()
-    let emptyLabel = UILabel()
+    let emptyStateView = HistoryEmptyStateView()
     private(set) lazy var collectionView = UICollectionView(
         frame: .zero,
         collectionViewLayout: makeHistoryLayout()

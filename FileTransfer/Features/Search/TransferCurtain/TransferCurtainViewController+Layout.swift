@@ -143,13 +143,9 @@ extension TransferCurtainViewController {
         sheetView.addSubview(collectionView)
 
         // Empty state
-        emptyLabel.text = "No transfers yet.\nPick someone and send something."
-        emptyLabel.numberOfLines = 0
-        emptyLabel.textAlignment = .center
-        emptyLabel.font = .systemFont(ofSize: 14)
-        emptyLabel.textColor = .secondaryLabel
-        emptyLabel.translatesAutoresizingMaskIntoConstraints = false
-        sheetView.addSubview(emptyLabel)
+        emptyStateView.translatesAutoresizingMaskIntoConstraints = false
+        emptyStateView.isHidden = true
+        sheetView.addSubview(emptyStateView)
 
         NSLayoutConstraint.activate([
             // Scrim — full screen
@@ -228,10 +224,10 @@ extension TransferCurtainViewController {
             collectionView.trailingAnchor.constraint(equalTo: sheetView.trailingAnchor),
             collectionView.bottomAnchor.constraint(equalTo: sheetView.bottomAnchor),
 
-            // Empty state label
-            emptyLabel.centerXAnchor.constraint(equalTo: collectionView.centerXAnchor),
-            emptyLabel.topAnchor.constraint(equalTo: collectionView.topAnchor, constant: 42),
-            emptyLabel.widthAnchor.constraint(equalTo: collectionView.widthAnchor, constant: -48),
+            // Empty state
+            emptyStateView.centerXAnchor.constraint(equalTo: collectionView.centerXAnchor),
+            emptyStateView.topAnchor.constraint(equalTo: collectionView.topAnchor, constant: 56),
+            emptyStateView.widthAnchor.constraint(equalTo: collectionView.widthAnchor, constant: -48),
         ])
     }
 }

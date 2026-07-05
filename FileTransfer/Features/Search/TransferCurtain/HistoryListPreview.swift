@@ -228,10 +228,18 @@ private final class HistoryListPreviewController: UIViewController {
         frame: .zero,
         collectionViewLayout: makeLayout()
     )
+    private let emptyStateView = HistoryEmptyStateView()
     private var diffDataSource: UICollectionViewDiffableDataSource<String, UUID>!
-    private let allRecords = records()
+    private let allRecords: [TransferRecord]
     private var byID: [UUID: TransferRecord] = [:]
     private let gate: any HistoryThumbnailGate = PreviewThumbnailGate()
+
+    init(records: [TransferRecord] = records()) {
+        self.allRecords = records
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -240,17 +248,26 @@ private final class HistoryListPreviewController: UIViewController {
         setupCollectionView()
         setupDataSource()
         applySnapshot()
+        emptyStateView.isHidden = !allRecords.isEmpty
     }
 
     private func setupCollectionView() {
         collectionView.backgroundColor = .systemBackground
         collectionView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(collectionView)
+
+        emptyStateView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(emptyStateView)
+
         NSLayoutConstraint.activate([
             collectionView.topAnchor.constraint(equalTo: view.topAnchor),
             collectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             collectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             collectionView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            emptyStateView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            emptyStateView.topAnchor.constraint(equalTo: view.topAnchor, constant: 100),
+            emptyStateView.widthAnchor.constraint(equalTo: view.widthAnchor, constant: -48),
         ])
     }
 
@@ -364,13 +381,18 @@ private final class HistoryListPreviewController: UIViewController {
 // MARK: - SwiftUI preview
 
 private struct HistoryListPreviewWrapper: UIViewControllerRepresentable {
+    var mockRecords: [TransferRecord] = records()
     func makeUIViewController(context: Context) -> HistoryListPreviewController {
-        HistoryListPreviewController()
+        HistoryListPreviewController(records: mockRecords)
     }
     func updateUIViewController(_ vc: HistoryListPreviewController, context: Context) {}
 }
 
 #Preview("History — all cell types", traits: .fixedLayout(width: 390, height: 900)) {
     HistoryListPreviewWrapper()
+}
+
+#Preview("History — empty state", traits: .fixedLayout(width: 390, height: 900)) {
+    HistoryListPreviewWrapper(mockRecords: [])
 }
 #endif
