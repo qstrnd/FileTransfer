@@ -11,6 +11,7 @@ struct SearchView: View {
     @State private var showMediaPicker = false
     @State private var showContactPicker = false
     @State private var didBackground = false
+    @State private var showCopiedToast = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
@@ -54,11 +55,22 @@ struct SearchView: View {
         .background(PinnedWindow(
             content: ReceivedTextAlert(
                 message: viewModel.receivedMessage,
-                onDismiss: { viewModel.receivedMessage = nil }
+                onDismiss: { viewModel.receivedMessage = nil },
+                onCopied: { showCopiedTextToast() }
             ),
             isVisible: viewModel.receivedMessage != nil,
             isInteractive: true,
-            hideDelay: 0.2
+            hideDelay: 0.2,
+            // The text-selection edit menu (Copy/Look Up/…) always targets the
+            // scene's key window — without this it renders behind this overlay.
+            becomesKey: true
+        ))
+        .background(PinnedWindow(
+            content: CopiedToast(),
+            isVisible: showCopiedToast,
+            windowLevel: .alert + 1,
+            isInteractive: false,
+            hideDelay: 0.3
         ))
         .background(PinnedReceivingToast(
             progress: viewModel.receivingMediaTransfer?.receivingProgress
@@ -195,6 +207,18 @@ struct SearchView: View {
             default:
                 break
             }
+        }
+    }
+
+    // MARK: - Copied-text toast
+
+    private func showCopiedTextToast() {
+        Task { @MainActor in
+            // Brief pause so the alert card's exit animation leads; then the toast slides in.
+            try? await Task.sleep(for: .milliseconds(150))
+            showCopiedToast = true
+            try? await Task.sleep(for: .seconds(2))
+            showCopiedToast = false
         }
     }
 

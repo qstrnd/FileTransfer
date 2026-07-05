@@ -32,6 +32,11 @@ struct PinnedWindow<Content: View>: UIViewRepresentable {
     /// Seconds to wait before hiding the UIWindow after `isVisible` → false.
     /// Set to the longest exit animation duration of the hosted `Content`.
     var hideDelay: TimeInterval = 0
+    /// When true, the window becomes the scene's key window while visible.
+    /// System UI that always targets the key window — like the text-selection
+    /// edit menu (Copy/Look Up/…) — otherwise renders behind this overlay
+    /// instead of on top of it, since it's presented in the app's main window.
+    var becomesKey: Bool = false
 
     func makeUIView(context: Context) -> UIView {
         let v = UIView()
@@ -66,6 +71,7 @@ struct PinnedWindow<Content: View>: UIViewRepresentable {
                     pendingHide = nil
                     window?.isUserInteractionEnabled = parent.isInteractive
                     window?.isHidden = false
+                    if parent.becomesKey { window?.makeKey() }
                     UIView.animate(withDuration: 0.2) { self.window?.alpha = 1 }
                 } else {
                     window?.isUserInteractionEnabled = false
@@ -86,6 +92,7 @@ struct PinnedWindow<Content: View>: UIViewRepresentable {
             newWindow.isUserInteractionEnabled = parent.isInteractive
             newWindow.alpha = 0
             newWindow.isHidden = false
+            if parent.becomesKey { newWindow.makeKey() }
 
             UIView.animate(
                 withDuration: 0.35, delay: 0,

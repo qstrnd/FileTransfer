@@ -3,12 +3,15 @@ import UIKit
 
 /// Full-screen overlay shown when a text message arrives from a peer.
 /// Follows the same always-in-hierarchy pattern as InvitationAlert so
-/// backdrop, card, and toast can animate independently.
+/// backdrop and card can animate independently.
 struct ReceivedTextAlert: View {
     let message: TransferMessage?
     let onDismiss: () -> Void
-
-    @State private var showCopiedToast = false
+    /// Called right after the text is copied to the pasteboard, before the card
+    /// dismisses. The caller shows the "Copied to clipboard" toast in its own
+    /// window so it isn't torn down along with this alert's window — see
+    /// `CopiedToast` and its `PinnedWindow` in `SearchView`.
+    let onCopied: () -> Void
 
     private let cardCornerRadius: CGFloat = 20
 
@@ -24,19 +27,8 @@ struct ReceivedTextAlert: View {
                 alertCard(for: message)
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
-            if showCopiedToast {
-                copiedToast
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .padding(.top, 12)
-                    .allowsHitTesting(false)
-            }
         }
         .animation(.spring(duration: 0.3), value: message?.id)
-        .animation(.spring(duration: 0.35), value: showCopiedToast)
-        // Only reset toast when a genuinely new message arrives, not when message → nil
-        // (nil happens on dismiss, and the toast should outlive the card animation).
-        .onChange(of: message?.id) { _, newID in if newID != nil { showCopiedToast = false } }
     }
 
     // MARK: - Card
@@ -102,34 +94,12 @@ struct ReceivedTextAlert: View {
         .padding(.horizontal, 24)
     }
 
-    // MARK: - Toast
-
-    private var copiedToast: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "exclamationmark.circle.fill")
-                .foregroundStyle(.green)
-                .font(.system(size: 17, weight: .semibold))
-            Text("Copied to clipboard")
-                .font(.subheadline.weight(.semibold))
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 11)
-        .background(.regularMaterial, in: Capsule())
-        .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
-    }
-
     // MARK: - Actions
 
     private func copyAndDismiss(_ text: String) {
         UIPasteboard.general.string = text
-        onDismiss()         // dismiss the card immediately
-        Task { @MainActor in
-            // Brief pause so the card's exit animation leads; then toast slides in.
-            try? await Task.sleep(for: .milliseconds(150))
-            showCopiedToast = true
-            try? await Task.sleep(for: .seconds(2))
-            showCopiedToast = false
-        }
+        onCopied()
+        onDismiss()   // dismiss the card immediately
     }
 }
 
@@ -174,7 +144,8 @@ private struct SelectableTextView: UIViewRepresentable {
         Color(.systemGroupedBackground).ignoresSafeArea()
         ReceivedTextAlert(
             message: TransferMessage(senderName: "🦒 Cunning Giraffe", text: "Hey, on my way! Should be there in about 10 minutes. See you soon 👋"),
-            onDismiss: {}
+            onDismiss: {},
+            onCopied: {}
         )
     }
 }
@@ -184,7 +155,8 @@ private struct SelectableTextView: UIViewRepresentable {
         Color(.systemGroupedBackground).ignoresSafeArea()
         ReceivedTextAlert(
             message: TransferMessage(senderName: "🐺 Puffy Wolf", text: "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur."),
-            onDismiss: {}
+            onDismiss: {},
+            onCopied: {}
         )
     }
 }
@@ -192,6 +164,6 @@ private struct SelectableTextView: UIViewRepresentable {
 #Preview("Hidden") {
     ZStack {
         Color(.systemGroupedBackground).ignoresSafeArea()
-        ReceivedTextAlert(message: nil, onDismiss: {})
+        ReceivedTextAlert(message: nil, onDismiss: {}, onCopied: {})
     }
 }
