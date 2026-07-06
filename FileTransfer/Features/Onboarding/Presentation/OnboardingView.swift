@@ -66,7 +66,7 @@ struct OnboardingView: View {
             } label: {
                 ZStack {
                     Circle()
-                        .fill(.white)
+                        .fill(Color.avatarBubbleBackground)
                         .frame(width: 128, height: 128)
                         .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 2)
                     Text(viewModel.emoji)
@@ -124,7 +124,7 @@ struct OnboardingView: View {
                             .foregroundStyle(.primary)
                             .padding(.horizontal, 20)
                             .padding(.vertical, 14)
-                            .background(.white, in: Capsule())
+                            .background(Color.avatarBubbleBackground, in: Capsule())
                             .shadow(color: .black.opacity(0.07), radius: 6, x: 0, y: 1)
                     }
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
@@ -154,7 +154,7 @@ struct OnboardingView: View {
             .font(.body.weight(.semibold))
             .foregroundStyle(primary ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
             .padding(16)
-            .background(primary ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.white), in: Circle())
+            .background(primary ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(Color.avatarBubbleBackground), in: Circle())
             .shadow(color: .black.opacity(primary ? 0.2 : 0.07), radius: 6, x: 0, y: 1)
     }
 }

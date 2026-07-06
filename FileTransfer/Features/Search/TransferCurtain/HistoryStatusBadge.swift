@@ -22,11 +22,10 @@ final class HistoryStatusBadge: UIView {
 
     func configure(direction: TransferDirection) {
         let received = direction == .received
-        let tint: UIColor = received ? .systemGreen : UIColor(red: 0.20, green: 0.48, blue: 1.0, alpha: 1)
-        backgroundColor = received
-            ? UIColor(red: 0.84, green: 0.96, blue: 0.87, alpha: 1)
-            : UIColor(red: 0.87, green: 0.93, blue: 1.00, alpha: 1)
-        let iconName = received ? "arrow.down.to.line" : "arrow.up.to.line"
+        let tint: UIColor = received ? .historyReceivedTint : .historySentTint
+        backgroundColor = received ? .historyReceivedBG : .historySentBG
+        // Diagonal call-direction arrows, matching the Phone app's recents list.
+        let iconName = received ? "arrow.down.left" : "arrow.up.right"
         iconView.image = UIImage(systemName: iconName,
                                  withConfiguration: UIImage.SymbolConfiguration(pointSize: 11, weight: .semibold))
         iconView.tintColor = tint
@@ -47,8 +46,11 @@ final class HistoryStatusBadge: UIView {
         layer.borderColor = UIColor.transferCurtainBackground.cgColor
         clipsToBounds = true
 
-        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { [weak self] (_: HistoryStatusBadge, tc: UITraitCollection) in
-            self?.refreshBorderColor(for: tc)
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { [weak self] (_: HistoryStatusBadge, _: UITraitCollection) in
+            // The handler's second parameter is the *previous* trait collection,
+            // not the new one — read self.traitCollection, already updated by now.
+            guard let self else { return }
+            refreshBorderColor(for: traitCollection)
         }
         NotificationCenter.default.addObserver(self,
             selector: #selector(appWillEnterForeground),

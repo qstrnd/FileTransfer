@@ -119,8 +119,11 @@ final class DocumentCardView: UIView {
         ])
 
         refreshBorderColor(for: traitCollection)
-        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { [weak self] (_: DocumentCardView, tc: UITraitCollection) in
-            self?.refreshBorderColor(for: tc)
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { [weak self] (_: DocumentCardView, _: UITraitCollection) in
+            // The handler's second parameter is the *previous* trait collection,
+            // not the new one — read self.traitCollection, already updated by now.
+            guard let self else { return }
+            refreshBorderColor(for: traitCollection)
         }
         NotificationCenter.default.addObserver(self,
             selector: #selector(appWillEnterForeground),

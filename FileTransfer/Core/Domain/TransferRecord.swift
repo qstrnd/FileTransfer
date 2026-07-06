@@ -9,10 +9,10 @@ enum TransferType: Sendable {
 
     var systemImage: String {
         switch self {
-        case .text:     "bubble.left"
+        case .text:     "text.bubble.fill"
         case .photo:    "photo"
-        case .document: "doc"
-        case .contact:  "person"
+        case .document: "doc.fill"
+        case .contact:  "person.fill"
         case .file:     "doc.fill"
         }
     }

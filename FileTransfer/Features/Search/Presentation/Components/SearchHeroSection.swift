@@ -21,7 +21,7 @@ struct SearchHeroSection: View {
                 Button { viewModel.goBack() } label: {
                     ZStack {
                         Circle()
-                            .fill(.white)
+                            .fill(Color.avatarBubbleBackground)
                             .frame(width: circleSize, height: circleSize)
                             .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 2)
                         Text(viewModel.emoji)

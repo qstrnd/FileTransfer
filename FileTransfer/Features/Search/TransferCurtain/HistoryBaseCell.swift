@@ -156,7 +156,9 @@ class HistoryBaseCell: UICollectionViewCell {
 
     @objc private func refreshAvatarBorderColors() {
         let color = UIColor.transferCurtainBackground.resolvedColor(with: traitCollection).cgColor
-        avatarContainer.subviews.forEach { $0.layer.borderColor = color }
+        // Each avatarContainer subview is a shadow-casting wrapper; the actual
+        // bordered circle is its one subview.
+        avatarContainer.subviews.forEach { $0.subviews.first?.layer.borderColor = color }
     }
 
     // MARK: - Peer avatar cluster
@@ -184,8 +186,10 @@ class HistoryBaseCell: UICollectionViewCell {
             addCircle(makePeerCircle(peer: peers[0], size: 44), slot: (44, 0, 0))
 
         case 2:
-            // Primary top-left, secondary bottom-right — add back-to-front.
-            let slots: [Slot] = [(36, 0, 0), (28, 16, 16)]
+            // Front bubble (bottom-right, larger) is primary and fully visible;
+            // back bubble (top-left, smaller) is secondary, sits behind it in
+            // z-order, and is nudged a bit further down so it tucks in under it.
+            let slots: [Slot] = [(36, 8, 8), (28, 0, 4)]
             for (peer, slot) in zip(peers, slots).reversed() {
                 addCircle(makePeerCircle(peer: peer, size: slot.size), slot: slot)
             }
@@ -216,20 +220,39 @@ class HistoryBaseCell: UICollectionViewCell {
     }
 
     private func makePeerCircle(peer: Peer, size: CGFloat) -> UIView {
-        makeAvatarCircle(text: peer.emojiComponent, fontSize: size * 0.52, textColor: .label)
+        makeAvatarCircle(text: peer.emojiComponent, size: size, fontSize: size * 0.52, textColor: .label)
     }
 
     private func makeCountCircle(count: Int, size: CGFloat) -> UIView {
-        makeAvatarCircle(text: "+\(count)", fontSize: size * 0.38, textColor: .secondaryLabel, weight: .semibold)
+        makeAvatarCircle(text: "+\(count)", size: size, fontSize: size * 0.38, textColor: .secondaryLabel, weight: .semibold)
     }
 
-    private func makeAvatarCircle(text: String, fontSize: CGFloat, textColor: UIColor, weight: UIFont.Weight = .regular) -> UIView {
-        let container = UIView()
-        // Unified with the hero/peer bubble fill in Search (SearchHeroSection, PeerCell).
-        container.backgroundColor = .white
-        container.layer.borderWidth = 1.5
-        container.layer.borderColor = UIColor.transferCurtainBackground.cgColor
-        container.clipsToBounds = true
+    private func makeAvatarCircle(
+        text: String, size: CGFloat, fontSize: CGFloat, textColor: UIColor, weight: UIFont.Weight = .regular
+    ) -> UIView {
+        // Outer wrapper casts the shadow; inner `circle` clips content to the
+        // round shape — clipsToBounds and shadows can't coexist on one layer.
+        // Same "elevated card" treatment as Search's hero/peer bubbles
+        // (SearchHeroSection, PeerCell) and Onboarding's identity circle.
+        let wrapper = UIView(frame: CGRect(x: 0, y: 0, width: size, height: size))
+        wrapper.layer.shadowColor = UIColor.black.cgColor
+        wrapper.layer.shadowOpacity = 0.15
+        wrapper.layer.shadowRadius = 3
+        wrapper.layer.shadowOffset = CGSize(width: 0, height: 1)
+
+        let circle = UIView(frame: wrapper.bounds)
+        circle.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        circle.backgroundColor = .historyAvatarBubbleFill
+        circle.layer.borderWidth = 1.5
+        // Resolve against this cell's own trait collection now — a plain
+        // `.cgColor` grab on a dynamic UIColor snapshots whatever its default,
+        // unresolved appearance is, which won't reliably match the cell's
+        // actual current background on every fresh configure/reuse.
+        circle.layer.borderColor = UIColor.transferCurtainBackground
+            .resolvedColor(with: traitCollection).cgColor
+        circle.layer.cornerRadius = size / 2
+        circle.clipsToBounds = true
+        wrapper.addSubview(circle)
 
         let label = UILabel()
         label.text = text
@@ -237,29 +260,14 @@ class HistoryBaseCell: UICollectionViewCell {
         label.textColor = textColor
         label.textAlignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(label)
+        circle.addSubview(label)
         NSLayoutConstraint.activate([
-            label.topAnchor.constraint(equalTo: container.topAnchor),
-            label.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            label.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            label.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            label.topAnchor.constraint(equalTo: circle.topAnchor),
+            label.bottomAnchor.constraint(equalTo: circle.bottomAnchor),
+            label.leadingAnchor.constraint(equalTo: circle.leadingAnchor),
+            label.trailingAnchor.constraint(equalTo: circle.trailingAnchor),
         ])
 
-        // Dark-mode-only veil: a plain white bubble reads as glaringly bright
-        // against the curtain's darker background, so lightly darken it in
-        // dark mode. Passthrough (clear) in light mode, and to touches always.
-        let veil = UIView()
-        veil.isUserInteractionEnabled = false
-        veil.backgroundColor = .curtainDarkModeVeil
-        veil.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(veil)
-        NSLayoutConstraint.activate([
-            veil.topAnchor.constraint(equalTo: container.topAnchor),
-            veil.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            veil.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            veil.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-        ])
-
-        return container
+        return wrapper
     }
 }

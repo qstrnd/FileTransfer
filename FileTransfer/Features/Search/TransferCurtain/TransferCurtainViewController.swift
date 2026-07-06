@@ -46,22 +46,22 @@ final class TransferCurtainViewController: UIViewController {
     let countLabel = UILabel()
     let clearButton = UIButton(type: .system)
     let textButton = TransferActionButton(
-        icon: "bubble.left", title: "Text",
+        icon: TransferType.text.systemImage, title: "Text",
         normalBG: TransferType.text.normalBG, pressedBG: TransferType.text.pressedBG,
         iconTint: TransferType.text.tintColor
     )
     let photoButton = TransferActionButton(
-        icon: "photo.stack", title: "Gallery",
+        icon: TransferType.photo.systemImage, title: "Gallery",
         normalBG: TransferType.photo.normalBG, pressedBG: TransferType.photo.pressedBG,
         iconTint: TransferType.photo.tintColor
     )
     let fileButton = TransferActionButton(
-        icon: "doc.fill", title: "File",
+        icon: TransferType.file.systemImage, title: "File",
         normalBG: TransferType.file.normalBG, pressedBG: TransferType.file.pressedBG,
         iconTint: TransferType.file.tintColor
     )
     let contactButton = TransferActionButton(
-        icon: "person", title: "Contact",
+        icon: TransferType.contact.systemImage, title: "Contact",
         normalBG: TransferType.contact.normalBG, pressedBG: TransferType.contact.pressedBG,
         iconTint: TransferType.contact.tintColor
     )

@@ -42,7 +42,8 @@ FileTransfer/
 ├── App/                        # Composition root: coordinator, root view, DI wiring
 ├── Core/
 │   ├── Domain/                 # Shared entities, gate protocols, pure logic
-│   └── Data/                   # Concrete infrastructure shared across features
+│   ├── Data/                   # Concrete infrastructure shared across features
+│   └── Presentation/           # SwiftUI/UIKit color tokens and other view-layer bits shared by 2+ features
 └── Features/<Name>/
     ├── Domain/                 # Feature-scoped entities, gate protocols, pure logic
     ├── UseCases/               # Feature-scoped workflows orchestrating gates
@@ -120,6 +121,27 @@ Features simple enough may omit sub-folders. Add a folder when a concern grows b
 - Views never import Infrastructure; they receive services through their ViewModel or explicit parameters.
 - Prefer explicit parameter passing over `@Environment`. The only sanctioned use of `@Environment` is for genuinely app-scoped state that spans multiple screens (e.g. a live session store owned at the composition root).
 - No business logic in views. A view must be replaceable with a mock view without breaking any logic.
+
+---
+
+## Colors & dark mode
+
+Every screen must look correct in both light and dark mode. This is enforced the same way as any other architectural rule, not left to visual QA.
+
+**Rules:**
+- **No hardcoded literal colors for anything that sits on a themed background** — no `.white`, `.black`, or raw `UIColor(red:green:blue:)` / `Color(red:green:blue:)` for a fill, background, or border that appears over `.systemBackground`/`.systemGroupedBackground`/a custom surface. Use a semantic system color (`.secondarySystemGroupedBackground`, `.systemFill`, `.quaternarySystemFill`, `.separator`, etc.) or a named constant with explicit light/dark branches. A literal `.white` card is invisible on a white light-mode background it happens to match, and looks jarring/flat on a near-black dark-mode background — both are bugs, not style choices.
+- **Every custom (non-system) color constant must define both variants**, e.g.:
+  ```swift
+  static var myBadgeBG: UIColor {
+      UIColor { traits in
+          traits.userInterfaceStyle == .dark ? darkValue : lightValue
+      }
+  }
+  ```
+  For SwiftUI, prefer `Color(.someUIColorSemanticName)` or the same `UIColor { traits in }` pattern wrapped in `Color(uiColor:)`. Dark values are not the light value darkened uniformly — follow the same light↔dark relationship Apple's own system colors use (pale/light-mode washes become deep, muted, still-hued dark washes, not gray).
+- **Colors live in named constants, never inline literals at the call site.** One `extension UIColor` / `extension Color` per concern, colocated with the feature that owns it (e.g. `TransferTypeColors.swift`, `TransferCurtainColors.swift`). A color used by 2+ features moves to `Core/Presentation/` (e.g. `AppColors.swift`) — features never reference another feature's color file, same as any other cross-feature reference.
+- **`CALayer` properties that store `CGColor` (`borderColor`, gradient `colors`, `shadowColor`) do not auto-update on trait changes** the way `UIView.backgroundColor`/SwiftUI `Color` do. Any view setting these must: (1) register via `registerForTraitChanges` and re-resolve using `self.traitCollection` — **not** the handler's second parameter, which is the *previous* trait collection, matching the old `traitCollectionDidChange(_ previousTraitCollection:)` — and (2) refresh again on `UIApplication.willEnterForegroundNotification`, since a CGColor snapshot goes stale if the system appearance changed while the app was backgrounded.
+- Verify visually in the simulator in both appearances (`xcrun simctl ui <device> appearance dark|light`) before considering a color change done — don't rely on reading the code.
 
 ---
 
@@ -238,6 +260,12 @@ Dependent gate chain or multi-step flow?
 
 New shared entity, gate protocol, or domain error (used by 2+ features)?
   → Core/Domain/
+
+New color constant used by only one feature?
+  → Features/<Name>/Presentation/<Name>Colors.swift
+
+New color constant used by 2+ features?
+  → Core/Presentation/AppColors.swift
 
 New framework-specific implementation of a shared Core protocol?
   → Core/Data/

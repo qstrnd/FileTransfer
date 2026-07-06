@@ -24,11 +24,12 @@ private final class EdgeGradientView: UIView {
 
     func updateColors(for tc: UITraitCollection) {
         let bg = UIColor.transferCurtainBackground.resolvedColor(with: tc)
+        // Disable the implicit action on `colors` so this always applies as a
+        // plain, immediate change rather than an implicit fade.
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         gradientLayer.colors = [bg.cgColor, bg.withAlphaComponent(0).cgColor]
-        // CAGradientLayer doesn't always redisplay immediately from a plain
-        // property assignment when the change originates from a trait-change
-        // callback rather than a normal render pass — force it explicitly.
-        gradientLayer.setNeedsDisplay()
+        CATransaction.commit()
     }
 
     @objc private func appWillEnterForeground() { updateColors(for: traitCollection) }

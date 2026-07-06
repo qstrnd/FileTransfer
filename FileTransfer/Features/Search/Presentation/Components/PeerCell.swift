@@ -24,7 +24,7 @@ struct PeerCell: View {
             VStack(spacing: 10) {
                 ZStack {
                     Circle()
-                        .fill(.white)
+                        .fill(Color.avatarBubbleBackground)
                         .frame(width: size, height: size)
                         .shadow(color: .black.opacity(0.07), radius: 10, x: 0, y: 2)
 
