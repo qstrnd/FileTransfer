@@ -121,6 +121,9 @@ extension TransferCurtainViewController {
         var config = UICollectionLayoutListConfiguration(appearance: .plain)
         config.showsSeparators = false
         config.headerMode = .supplementary
+        // The .plain appearance otherwise applies its own opaque background
+        // (near-black in dark mode), silently overriding collectionView.backgroundColor.
+        config.backgroundColor = .clear
         config.trailingSwipeActionsConfigurationProvider = { [weak self] indexPath in
             guard let self,
                   let id = dataSource?.itemIdentifier(for: indexPath) else { return nil }

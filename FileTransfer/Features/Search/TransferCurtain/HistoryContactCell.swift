@@ -110,7 +110,7 @@ private final class ContactGradientView: UIView {
     required init?(coder: NSCoder) { fatalError() }
 
     func updateColors(for tc: UITraitCollection) {
-        let bg = UIColor.systemBackground.resolvedColor(with: tc)
+        let bg = UIColor.transferCurtainBackground.resolvedColor(with: tc)
         gradientLayer.colors = [bg.cgColor, bg.withAlphaComponent(0).cgColor]
     }
 

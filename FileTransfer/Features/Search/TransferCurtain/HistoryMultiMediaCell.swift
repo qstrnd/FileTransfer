@@ -1,6 +1,6 @@
 import UIKit
 
-// Horizontal gradient that fades from systemBackground (opaque) on one edge to clear.
+// Horizontal gradient that fades from the curtain background (opaque) on one edge to clear.
 private final class EdgeGradientView: UIView {
     override class var layerClass: AnyClass { CAGradientLayer.self }
     private var gradientLayer: CAGradientLayer { layer as! CAGradientLayer }
@@ -12,14 +12,26 @@ private final class EdgeGradientView: UIView {
         gradientLayer.startPoint = isLeading ? CGPoint(x: 0, y: 0.5) : CGPoint(x: 1, y: 0.5)
         gradientLayer.endPoint   = isLeading ? CGPoint(x: 1, y: 0.5) : CGPoint(x: 0, y: 0.5)
         gradientLayer.locations  = [0, 1]
+        // CGColor snapshots don't re-resolve on their own if the system
+        // appearance changes while the app is backgrounded — refresh on return.
+        NotificationCenter.default.addObserver(self,
+            selector: #selector(appWillEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil)
     }
 
     required init?(coder: NSCoder) { fatalError() }
 
     func updateColors(for tc: UITraitCollection) {
-        let bg = UIColor.systemBackground.resolvedColor(with: tc)
+        let bg = UIColor.transferCurtainBackground.resolvedColor(with: tc)
         gradientLayer.colors = [bg.cgColor, bg.withAlphaComponent(0).cgColor]
+        // CAGradientLayer doesn't always redisplay immediately from a plain
+        // property assignment when the change originates from a trait-change
+        // callback rather than a normal render pass — force it explicitly.
+        gradientLayer.setNeedsDisplay()
     }
+
+    @objc private func appWillEnterForeground() { updateColors(for: traitCollection) }
 }
 
 final class HistoryMultiMediaCell: HistoryBaseCell {
@@ -100,6 +112,7 @@ final class HistoryMultiMediaCell: HistoryBaseCell {
             iv.tag = idx
             iv.widthAnchor.constraint(equalToConstant: Self.thumbSize).isActive = true
             iv.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(didTapThumb(_:))))
+            addVeil(to: iv)
             thumbsStack.addArrangedSubview(iv)
             thumbViews.append(iv)
 
@@ -189,6 +202,22 @@ final class HistoryMultiMediaCell: HistoryBaseCell {
             leftGradient.updateColors(for: traitCollection)
             rightGradient.updateColors(for: traitCollection)
         }
+    }
+
+    /// Dark-mode-only veil so a bright photo doesn't look glaringly out of
+    /// place against the curtain's darker background. Passthrough in light mode.
+    private func addVeil(to view: UIView) {
+        let veil = UIView()
+        veil.isUserInteractionEnabled = false
+        veil.backgroundColor = .curtainDarkModeVeil
+        veil.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(veil)
+        NSLayoutConstraint.activate([
+            veil.topAnchor.constraint(equalTo: view.topAnchor),
+            veil.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            veil.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            veil.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+        ])
     }
 
     private func cancelLoad() {

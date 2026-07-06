@@ -252,7 +252,7 @@ private final class HistoryListPreviewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = .transferCurtainBackground
         byID = Dictionary(uniqueKeysWithValues: allRecords.map { ($0.id, $0) })
         setupCollectionView()
         setupDataSource()
@@ -261,7 +261,7 @@ private final class HistoryListPreviewController: UIViewController {
     }
 
     private func setupCollectionView() {
-        collectionView.backgroundColor = .systemBackground
+        collectionView.backgroundColor = .transferCurtainBackground
         collectionView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(collectionView)
 
@@ -284,6 +284,7 @@ private final class HistoryListPreviewController: UIViewController {
         var config = UICollectionLayoutListConfiguration(appearance: .plain)
         config.showsSeparators = false
         config.headerMode = .supplementary
+        config.backgroundColor = .clear
         return UICollectionViewCompositionalLayout.list(using: config)
     }
 

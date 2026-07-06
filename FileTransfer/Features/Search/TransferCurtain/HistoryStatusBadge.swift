@@ -36,7 +36,7 @@ final class HistoryStatusBadge: UIView {
     }
 
     private func refreshBorderColor(for tc: UITraitCollection) {
-        layer.borderColor = UIColor.systemBackground.resolvedColor(with: tc).cgColor
+        layer.borderColor = UIColor.transferCurtainBackground.resolvedColor(with: tc).cgColor
     }
 
     @objc private func appWillEnterForeground() { refreshBorderColor(for: traitCollection) }
@@ -44,7 +44,7 @@ final class HistoryStatusBadge: UIView {
     private func setup() {
         layer.cornerRadius = 12
         layer.borderWidth = 1.5
-        layer.borderColor = UIColor.systemBackground.cgColor
+        layer.borderColor = UIColor.transferCurtainBackground.cgColor
         clipsToBounds = true
 
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { [weak self] (_: HistoryStatusBadge, tc: UITraitCollection) in

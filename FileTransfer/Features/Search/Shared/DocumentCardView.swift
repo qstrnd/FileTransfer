@@ -32,6 +32,18 @@ final class DocumentCardView: UIView {
         return l
     }()
 
+    /// Dark-mode-only veil over the thumbnail so a bright document preview
+    /// doesn't look glaringly out of place against the curtain's darker
+    /// background. Sits above the image but below the badge, which stays
+    /// fully legible. Passthrough (clear) in light mode.
+    private let veil: UIView = {
+        let v = UIView()
+        v.isUserInteractionEnabled = false
+        v.backgroundColor = .curtainDarkModeVeil
+        v.translatesAutoresizingMaskIntoConstraints = false
+        return v
+    }()
+
     private var loadTask: Task<Void, Never>?
 
     // MARK: - Init
@@ -91,12 +103,17 @@ final class DocumentCardView: UIView {
         addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(handleTap)))
 
         addSubview(imageView)
+        addSubview(veil)
         addSubview(badge)
         NSLayoutConstraint.activate([
             imageView.topAnchor.constraint(equalTo: topAnchor),
             imageView.leadingAnchor.constraint(equalTo: leadingAnchor),
             imageView.trailingAnchor.constraint(equalTo: trailingAnchor),
             imageView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            veil.topAnchor.constraint(equalTo: topAnchor),
+            veil.leadingAnchor.constraint(equalTo: leadingAnchor),
+            veil.trailingAnchor.constraint(equalTo: trailingAnchor),
+            veil.bottomAnchor.constraint(equalTo: bottomAnchor),
             badge.topAnchor.constraint(equalTo: topAnchor, constant: 6),
             badge.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
         ])

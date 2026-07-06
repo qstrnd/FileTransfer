@@ -23,7 +23,7 @@ class HistoryBaseCell: UICollectionViewCell {
     private let timeLabelPill: UIView = {
         let v = UIView()
         // Matches cell background — only visible when content (image/doc) appears beneath it.
-        v.backgroundColor = .systemBackground
+        v.backgroundColor = .transferCurtainBackground
         v.layer.cornerRadius = 7
         v.translatesAutoresizingMaskIntoConstraints = false
         return v
@@ -155,7 +155,7 @@ class HistoryBaseCell: UICollectionViewCell {
     }
 
     @objc private func refreshAvatarBorderColors() {
-        let color = UIColor.systemBackground.resolvedColor(with: traitCollection).cgColor
+        let color = UIColor.transferCurtainBackground.resolvedColor(with: traitCollection).cgColor
         avatarContainer.subviews.forEach { $0.layer.borderColor = color }
     }
 
@@ -225,9 +225,11 @@ class HistoryBaseCell: UICollectionViewCell {
 
     private func makeAvatarCircle(text: String, fontSize: CGFloat, textColor: UIColor, weight: UIFont.Weight = .regular) -> UIView {
         let container = UIView()
-        container.backgroundColor = .systemGroupedBackground
+        // Unified with the hero/peer bubble fill in Search (SearchHeroSection, PeerCell).
+        container.backgroundColor = .white
         container.layer.borderWidth = 1.5
-        container.layer.borderColor = UIColor.systemBackground.cgColor
+        container.layer.borderColor = UIColor.transferCurtainBackground.cgColor
+        container.clipsToBounds = true
 
         let label = UILabel()
         label.text = text
@@ -242,6 +244,22 @@ class HistoryBaseCell: UICollectionViewCell {
             label.leadingAnchor.constraint(equalTo: container.leadingAnchor),
             label.trailingAnchor.constraint(equalTo: container.trailingAnchor),
         ])
+
+        // Dark-mode-only veil: a plain white bubble reads as glaringly bright
+        // against the curtain's darker background, so lightly darken it in
+        // dark mode. Passthrough (clear) in light mode, and to touches always.
+        let veil = UIView()
+        veil.isUserInteractionEnabled = false
+        veil.backgroundColor = .curtainDarkModeVeil
+        veil.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(veil)
+        NSLayoutConstraint.activate([
+            veil.topAnchor.constraint(equalTo: container.topAnchor),
+            veil.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            veil.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            veil.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+        ])
+
         return container
     }
 }

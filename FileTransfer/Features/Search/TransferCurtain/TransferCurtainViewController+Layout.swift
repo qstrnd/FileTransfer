@@ -64,7 +64,7 @@ extension TransferCurtainViewController {
         view.addSubview(scrimView)
 
         // Sheet card
-        sheetView.backgroundColor = .systemBackground
+        sheetView.backgroundColor = .transferCurtainBackground
         sheetView.layer.cornerRadius = 22
         sheetView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
         sheetView.layer.shadowColor = UIColor.black.cgColor
