@@ -8,13 +8,23 @@ final class HistoryTextCell: HistoryBaseCell {
     private var lastHiddenState = true
     private var isSizingPass = false
 
-    private let bodyLabel: UILabel = {
-        let l = UILabel()
-        l.font = .systemFont(ofSize: 15)
-        l.textColor = .label
-        l.numberOfLines = 2
-        l.translatesAutoresizingMaskIntoConstraints = false
-        return l
+    // A UITextView (not UILabel) so the transferred text can be selected and
+    // copied, like Messages/Mail — configured to look and size like a plain
+    // label (no scrolling, no editing, no insets).
+    private let bodyLabel: UITextView = {
+        let tv = UITextView()
+        tv.font = .systemFont(ofSize: 15)
+        tv.textColor = .label
+        tv.backgroundColor = .clear
+        tv.isEditable = false
+        tv.isSelectable = true
+        tv.isScrollEnabled = false
+        tv.textContainerInset = .zero
+        tv.textContainer.lineFragmentPadding = 0
+        tv.textContainer.maximumNumberOfLines = 2
+        tv.textContainer.lineBreakMode = .byTruncatingTail
+        tv.translatesAutoresizingMaskIntoConstraints = false
+        return tv
     }()
 
     private lazy var moreButton: UIButton = {
@@ -78,7 +88,7 @@ final class HistoryTextCell: HistoryBaseCell {
         super.configure(with: record)
         bodyLabel.text = record.detail
         isExpanded = false
-        bodyLabel.numberOfLines = 2
+        setLineLimit(2)
         // Hide until layoutSubviews confirms overflow; stack collapses the button space.
         moreButton.isHidden = true
         lastHiddenState = true
@@ -87,7 +97,9 @@ final class HistoryTextCell: HistoryBaseCell {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        guard !isExpanded, bodyLabel.bounds.width > 0 else { return }
+        guard bodyLabel.bounds.width > 0 else { return }
+        updateTextVerticalCentering()
+        guard !isExpanded else { return }
         let shouldHide = !textOverflows(bodyLabel.text ?? "", width: bodyLabel.bounds.width)
         guard shouldHide != lastHiddenState else { return }
         lastHiddenState = shouldHide
@@ -103,7 +115,7 @@ final class HistoryTextCell: HistoryBaseCell {
         super.prepareForReuse()
         bodyLabel.text = nil
         isExpanded = false
-        bodyLabel.numberOfLines = 2
+        setLineLimit(2)
         moreButton.isHidden = true
         lastHiddenState = true
         onSizeChange = nil
@@ -133,7 +145,7 @@ final class HistoryTextCell: HistoryBaseCell {
         // any ambient UIView.animate context. Only the cell height (via
         // performBatchUpdates in onSizeChange) should animate.
         UIView.performWithoutAnimation {
-            bodyLabel.numberOfLines = expanding ? 0 : 2
+            setLineLimit(expanding ? 0 : 2)
             if !expanding {
                 moreButton.isHidden = !textOverflows(bodyLabel.text ?? "", width: bodyLabel.bounds.width)
                 lastHiddenState = moreButton.isHidden
@@ -141,6 +153,35 @@ final class HistoryTextCell: HistoryBaseCell {
             updateMoreButtonTitle()
         }
         onSizeChange?()
+    }
+
+    /// When collapsed, the row is often taller than the 1–2 lines of text it
+    /// holds (e.g. to fit the 44pt avatar), and bodyLabel — the flexible
+    /// element in bodyStack — absorbs that slack, growing past its text's own
+    /// height. UITextView top-aligns by default, so without this the text
+    /// sits high in the extra space instead of centered in it. Only applies
+    /// pre-expand: once expanded, the row grows to fit all the text, so
+    /// there's no slack left to center within.
+    private func updateTextVerticalCentering() {
+        guard !isExpanded else {
+            bodyLabel.textContainerInset = .zero
+            return
+        }
+        bodyLabel.layoutManager.ensureLayout(for: bodyLabel.textContainer)
+        let textHeight = bodyLabel.layoutManager.usedRect(for: bodyLabel.textContainer).height
+        let topInset = max(0, (bodyLabel.bounds.height - textHeight) / 2)
+        bodyLabel.textContainerInset = UIEdgeInsets(top: topInset, left: 0, bottom: 0, right: 0)
+    }
+
+    private func setLineLimit(_ maxLines: Int) {
+        bodyLabel.textContainer.maximumNumberOfLines = maxLines
+        bodyLabel.textContainer.lineBreakMode = maxLines == 0 ? .byWordWrapping : .byTruncatingTail
+        // Unlike UILabel.numberOfLines, mutating the text container doesn't
+        // invalidate UITextView's cached intrinsic size on its own — without
+        // this, toggling the line limit alone (i.e. not paired with a new
+        // `text` assignment, which does invalidate) leaves the cell's height
+        // stuck, so "more"/"less" never visibly expands or collapses it.
+        bodyLabel.invalidateIntrinsicContentSize()
     }
 
     private func updateMoreButtonTitle() {
