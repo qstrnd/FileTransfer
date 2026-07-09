@@ -67,6 +67,7 @@ final class TransferCurtainViewController: UIViewController {
     )
     let headerView = UIView()
     let historyHeaderView = UIView()
+    let historyHeaderHeight: CGFloat = 44
     let hintLabel = UILabel()
     let emptyStateView = HistoryEmptyStateView()
     private(set) lazy var collectionView = UICollectionView(
@@ -75,6 +76,12 @@ final class TransferCurtainViewController: UIViewController {
     )
 
     var dataSource: UICollectionViewDiffableDataSource<String, UUID>?
+    /// Top-space between the divider and the collection view. Animated from
+    /// `historyHeaderHeight` (rest) to 0 (scrolled) so the already-pinned
+    /// section header — which clamps to the collection view's own frame, not
+    /// its content inset — slides up to the divider in lockstep with the
+    /// frame instead of sitting at a permanent inset-sized gap.
+    var collectionViewTopConstraint: NSLayoutConstraint!
 
     var thumbnailGate: (any HistoryThumbnailGate)?
     var onDeleteRecord: ((UUID) -> Void)?
@@ -86,6 +93,10 @@ final class TransferCurtainViewController: UIViewController {
     var panStartOffset: CGFloat = 0
     var panVelocity: CGFloat = 0
     var hasSnappedInitially = false
+
+    // MARK: - History header overlay state
+
+    var isHistoryHeaderHidden = false
 
     // MARK: - Lifecycle
 

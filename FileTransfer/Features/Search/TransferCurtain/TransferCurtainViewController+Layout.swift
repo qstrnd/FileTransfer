@@ -11,8 +11,8 @@ extension TransferCurtainViewController {
         //   grab area:        8 (top pad) + 5 (pill) + 8 (bottom pad) = 21
         //   selection row:   36 + 12 (gap below)                      = 48
         //   actions row:     80 + 14 (gap) + 1 (divider)              = 95
-        //   history header:  44
-        let peek: CGFloat = 21 + 48 + 95 + 44   // = 208
+        //   history header:  historyHeaderHeight (44)
+        let peek: CGFloat = 21 + 48 + 95 + historyHeaderHeight   // = 208
         expandedOffset = 0
         collapsedOffset = max(0, sheetView.bounds.height - peek)
     }
@@ -117,8 +117,11 @@ extension TransferCurtainViewController {
         divider.translatesAutoresizingMaskIntoConstraints = false
         headerView.addSubview(divider)
 
-        // History section header
+        // History section header — overlays the top of the collection view (see
+        // below); brought back to front after the collection view is added so
+        // it draws above scrolled content instead of being covered by it.
         historyHeaderView.translatesAutoresizingMaskIntoConstraints = false
+        historyHeaderView.backgroundColor = .transferCurtainBackground
         sheetView.addSubview(historyHeaderView)
 
         let historyTitle = UILabel()
@@ -136,11 +139,20 @@ extension TransferCurtainViewController {
         hintLabel.translatesAutoresizingMaskIntoConstraints = false
         historyHeaderView.addSubview(hintLabel)
 
-        // Collection view
+        // Collection view — anchored below the divider via collectionViewTopConstraint
+        // (see its declaration), so history content starts in the same place
+        // historyHeaderView occupies at rest. As the list scrolls, the sticky
+        // section header rises to that same spot while historyHeaderView
+        // fades out (see scrollViewDidScroll).
         collectionView.backgroundColor = .clear
         collectionView.showsVerticalScrollIndicator = false
         collectionView.translatesAutoresizingMaskIntoConstraints = false
         sheetView.addSubview(collectionView)
+        sheetView.bringSubviewToFront(historyHeaderView)
+
+        collectionViewTopConstraint = collectionView.topAnchor.constraint(
+            equalTo: headerView.bottomAnchor, constant: historyHeaderHeight
+        )
 
         // Empty state
         emptyStateView.translatesAutoresizingMaskIntoConstraints = false
@@ -207,19 +219,21 @@ extension TransferCurtainViewController {
             divider.heightAnchor.constraint(equalToConstant: 0.5),
             divider.bottomAnchor.constraint(equalTo: headerView.bottomAnchor),
 
-            // History section header
+            // History section header — overlays the top of the collection view
             historyHeaderView.topAnchor.constraint(equalTo: headerView.bottomAnchor),
             historyHeaderView.leadingAnchor.constraint(equalTo: sheetView.leadingAnchor, constant: 20),
             historyHeaderView.trailingAnchor.constraint(equalTo: sheetView.trailingAnchor, constant: -20),
-            historyHeaderView.heightAnchor.constraint(equalToConstant: 44),
+            historyHeaderView.heightAnchor.constraint(equalToConstant: historyHeaderHeight),
             historyTitle.leadingAnchor.constraint(equalTo: historyHeaderView.leadingAnchor),
             historyTitle.centerYAnchor.constraint(equalTo: historyHeaderView.centerYAnchor),
             hintLabel.trailingAnchor.constraint(equalTo: historyHeaderView.trailingAnchor),
             hintLabel.centerYAnchor.constraint(equalTo: historyHeaderView.centerYAnchor),
             hintLabel.leadingAnchor.constraint(greaterThanOrEqualTo: historyTitle.trailingAnchor, constant: 8),
 
-            // Collection view fills the rest of the sheet
-            collectionView.topAnchor.constraint(equalTo: historyHeaderView.bottomAnchor),
+            // Collection view: top constraint is collectionViewTopConstraint
+            // (activated below), animated between historyHeaderHeight (rest)
+            // and 0 (scrolled) — see collectionViewTopConstraint's doc comment.
+            collectionViewTopConstraint,
             collectionView.leadingAnchor.constraint(equalTo: sheetView.leadingAnchor),
             collectionView.trailingAnchor.constraint(equalTo: sheetView.trailingAnchor),
             collectionView.bottomAnchor.constraint(equalTo: sheetView.bottomAnchor),

@@ -177,6 +177,24 @@ extension TransferCurtainViewController: UICollectionViewDelegate {
         ql.dataSource = self
         present(ql, animated: true)
     }
+
+    // Sticky section headers clamp to the collection view's own frame, not
+    // its content inset — so a content-inset-based gap would stay pinned at
+    // a fixed distance from the divider forever, no matter how far the list
+    // scrolls. Instead, once scrolling starts, we collapse
+    // collectionViewTopConstraint's constant to 0, sliding the collection
+    // view's frame (and the header already pinned to its top) up to the
+    // divider, while the "RECENT TRANSFERS" overlay fades out in step.
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        let hidden = scrollView.contentOffset.y > 0.5
+        guard hidden != isHistoryHeaderHidden else { return }
+        isHistoryHeaderHidden = hidden
+        collectionViewTopConstraint.constant = hidden ? 0 : historyHeaderHeight
+        UIView.animate(withDuration: 0.2) {
+            self.historyHeaderView.alpha = hidden ? 0 : 1
+            self.view.layoutIfNeeded()
+        }
+    }
 }
 
 // MARK: - QLPreviewControllerDataSource
