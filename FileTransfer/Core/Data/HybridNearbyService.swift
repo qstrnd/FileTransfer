@@ -20,20 +20,28 @@ final class HybridNearbyService: NearbySessionService {
     weak var delegate: (any NearbySessionServiceDelegate)?
 
     private let mpc: MultipeerNearbyService
+    private let server: any FileTransferServerGate
 
-    init(mpc: MultipeerNearbyService = MultipeerNearbyService()) {
+    init(
+        mpc: MultipeerNearbyService = MultipeerNearbyService(),
+        server: any FileTransferServerGate = HTTPFileTransferServer()
+    ) {
         self.mpc = mpc
+        self.server = server
         mpc.delegate = self
+        server.delegate = self
     }
 
     // MARK: - NearbySessionService (control plane — always MPC)
 
     func start(displayName: String, deviceID: UUID) {
         mpc.start(displayName: displayName, deviceID: deviceID)
+        server.start(deviceID: deviceID, displayName: displayName)
     }
 
     func stop() {
         mpc.stop()
+        server.stop()
     }
 
     func connect(to peer: Peer, isReconnect: Bool) { mpc.connect(to: peer, isReconnect: isReconnect) }
@@ -100,5 +108,40 @@ extension HybridNearbyService: NearbySessionServiceDelegate {
             transferID: transferID, index: index, totalCount: totalCount,
             at: url, name: name, from: peer
         )
+    }
+}
+
+// MARK: - FileTransferServerDelegate (HTTP receptions → same delegate callbacks)
+
+extension HybridNearbyService: FileTransferServerDelegate {
+    func serverDidStartReceiving(item: IncomingTransferItemInfo, from peer: Peer) {
+        switch item.payload {
+        case .media:
+            // Match the MPC path's behavior: LP companion videos never announce
+            // a transfer start (MultipeerNearbyService skips .livePhotoVideo).
+            guard item.kind != .livePhotoVideo else { return }
+            delegate?.didStartReceivingMedia(transferID: item.transferID, totalCount: item.total, from: peer)
+        case .file:
+            delegate?.didStartReceivingFile(transferID: item.transferID, totalCount: item.total, from: peer)
+        }
+    }
+
+    func serverDidReceive(item: IncomingTransferItemInfo, at url: URL, from peer: Peer) {
+        switch item.payload {
+        case .media:
+            delegate?.didReceiveMediaItem(
+                transferID: item.transferID, index: item.index, totalCount: item.total,
+                at: url, kind: item.kind, fileName: item.fileName, from: peer
+            )
+        case .file:
+            delegate?.didReceiveFile(
+                transferID: item.transferID, index: item.index, totalCount: item.total,
+                at: url, name: item.fileName ?? "file", from: peer
+            )
+        }
+    }
+
+    func serverReceptionActivityChanged(activeCount: Int) {
+        // Phase 2: drives the background-task keeper while receptions are in flight.
     }
 }

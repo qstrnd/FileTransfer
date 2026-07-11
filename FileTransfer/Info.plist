@@ -5,12 +5,18 @@
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>FileTransfer saves received photos and videos to your library.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>FileTransfer discovers and connects to nearby devices to send text via MultipeerConnectivity.</string>
+	<string>FileTransfer discovers nearby devices and transfers your texts, photos, and files to them directly over the local network.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_ft-demo._tcp</string>
 		<string>_ft-demo._udp</string>
+		<string>_ftdata._tcp</string>
 	</array>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>remote-notification</string>
