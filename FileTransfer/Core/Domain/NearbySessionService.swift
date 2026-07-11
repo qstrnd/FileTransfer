@@ -55,10 +55,13 @@ protocol NearbySessionService: AnyObject {
     func connect(to peer: Peer, isReconnect: Bool)
     func disconnect(from peer: Peer)
     func send(text: String, to peer: Peer)
+    /// `onItemCompleted` fires once per file with the item's terminal outcome —
+    /// `.success` when delivered, `.failure` after every transport and retry
+    /// has been exhausted. Failures must be reported, never swallowed.
     @discardableResult
-    func sendMedia(_ files: [MediaFileToSend], to peer: Peer, onItemSent: @escaping @MainActor () -> Void) -> [Progress]
+    func sendMedia(_ files: [MediaFileToSend], to peer: Peer, onItemCompleted: @escaping @MainActor (Result<Void, TransferSendError>) -> Void) -> [Progress]
     @discardableResult
-    func sendFiles(_ files: [FileToSend], to peer: Peer, onItemSent: @escaping @MainActor () -> Void) -> [Progress]
+    func sendFiles(_ files: [FileToSend], to peer: Peer, onItemCompleted: @escaping @MainActor (Result<Void, TransferSendError>) -> Void) -> [Progress]
     func sendContact(data: Data, to peer: Peer)
     func sendPing(to peer: Peer)
     func sendPong(to peer: Peer)
@@ -69,8 +72,8 @@ protocol NearbySessionService: AnyObject {
 extension NearbySessionService {
     func connect(to peer: Peer) { connect(to: peer, isReconnect: false) }
     func disconnect(from peer: Peer) {}
-    func sendMedia(_ files: [MediaFileToSend], to peer: Peer, onItemSent: @escaping @MainActor () -> Void) -> [Progress] { [] }
-    func sendFiles(_ files: [FileToSend], to peer: Peer, onItemSent: @escaping @MainActor () -> Void) -> [Progress] { [] }
+    func sendMedia(_ files: [MediaFileToSend], to peer: Peer, onItemCompleted: @escaping @MainActor (Result<Void, TransferSendError>) -> Void) -> [Progress] { [] }
+    func sendFiles(_ files: [FileToSend], to peer: Peer, onItemCompleted: @escaping @MainActor (Result<Void, TransferSendError>) -> Void) -> [Progress] { [] }
     func sendContact(data: Data, to peer: Peer) {}
     func sendPing(to peer: Peer) {}
     func sendPong(to peer: Peer) {}

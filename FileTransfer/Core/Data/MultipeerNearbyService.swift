@@ -112,10 +112,18 @@ final class MultipeerNearbyService: NSObject, NearbySessionService {
     // Context byte sent with reconnect invitations so the receiver can auto-accept.
     nonisolated private static let reconnectContext = Data([0xFE, 0x52])        // 0xFE + 'R'
 
-    func sendMedia(_ files: [MediaFileToSend], to peer: Peer, onItemSent: @escaping @MainActor () -> Void) -> [Progress] {
-        guard let session, let peerID = registry.mcPeerID(for: peer.id) else { return [] }
+    func sendMedia(_ files: [MediaFileToSend], to peer: Peer, onItemCompleted: @escaping @MainActor (Result<Void, TransferSendError>) -> Void) -> [Progress] {
         // One transferID per batch — hyphens stripped so "_" stays an unambiguous delimiter.
-        let transferID = UUID().uuidString.replacingOccurrences(of: "-", with: "")
+        sendMedia(files, to: peer,
+                  transferID: UUID().uuidString.replacingOccurrences(of: "-", with: ""),
+                  onItemCompleted: onItemCompleted)
+    }
+
+    /// Internal overload with an explicit transferID so the hybrid facade can
+    /// fall back to MPC mid-batch while the receiver keeps accumulating items
+    /// under the transferID the HTTP-delivered items already used.
+    func sendMedia(_ files: [MediaFileToSend], to peer: Peer, transferID: String, onItemCompleted: @escaping @MainActor (Result<Void, TransferSendError>) -> Void) -> [Progress] {
+        guard let session, let peerID = registry.mcPeerID(for: peer.id) else { return [] }
         var progresses: [Progress] = []
         for file in files {
             let resource = MediaTransferResource(transferID: transferID, from: file)
@@ -125,7 +133,9 @@ final class MultipeerNearbyService: NSObject, NearbySessionService {
                         "sendMedia error idx=\(file.logicalIndex) kind=\(file.kind.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)"
                     )
                 }
-                Task { @MainActor in onItemSent() }
+                let result: Result<Void, TransferSendError> =
+                    error.map { .failure(.multipeerFailed($0.localizedDescription)) } ?? .success(())
+                Task { @MainActor in onItemCompleted(result) }
             }
             if let progress = session.sendResource(at: file.url, withName: resource.name, toPeer: peerID, withCompletionHandler: completion) {
                 progresses.append(progress)
@@ -134,9 +144,15 @@ final class MultipeerNearbyService: NSObject, NearbySessionService {
         return progresses
     }
 
-    func sendFiles(_ files: [FileToSend], to peer: Peer, onItemSent: @escaping @MainActor () -> Void) -> [Progress] {
+    func sendFiles(_ files: [FileToSend], to peer: Peer, onItemCompleted: @escaping @MainActor (Result<Void, TransferSendError>) -> Void) -> [Progress] {
+        sendFiles(files, to: peer,
+                  transferID: UUID().uuidString.replacingOccurrences(of: "-", with: ""),
+                  onItemCompleted: onItemCompleted)
+    }
+
+    /// Internal overload with an explicit transferID — see `sendMedia(_:to:transferID:onItemCompleted:)`.
+    func sendFiles(_ files: [FileToSend], to peer: Peer, transferID: String, onItemCompleted: @escaping @MainActor (Result<Void, TransferSendError>) -> Void) -> [Progress] {
         guard let session, let peerID = registry.mcPeerID(for: peer.id) else { return [] }
-        let transferID = UUID().uuidString.replacingOccurrences(of: "-", with: "")
         var progresses: [Progress] = []
         for file in files {
             let resource = FileTransferResource(
@@ -148,7 +164,9 @@ final class MultipeerNearbyService: NSObject, NearbySessionService {
                         "sendFiles error idx=\(file.index): \(error.localizedDescription, privacy: .public)"
                     )
                 }
-                Task { @MainActor in onItemSent() }
+                let result: Result<Void, TransferSendError> =
+                    error.map { .failure(.multipeerFailed($0.localizedDescription)) } ?? .success(())
+                Task { @MainActor in onItemCompleted(result) }
             }
             if let progress = session.sendResource(at: file.url, withName: resource.name, toPeer: peerID, withCompletionHandler: completion) {
                 progresses.append(progress)

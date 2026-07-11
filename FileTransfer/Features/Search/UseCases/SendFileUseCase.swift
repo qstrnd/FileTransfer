@@ -1,5 +1,8 @@
 import Foundation
 import Observation
+import OSLog
+
+private let log = Logger(subsystem: "com.qstrnd.FileTransfer", category: "SendFile")
 
 @Observable
 @MainActor
@@ -42,8 +45,14 @@ final class SendFileUseCase {
         let recordID = UUID()
 
         for peer in peers {
-            let progresses = session.sendFiles(files, to: peer) { [weak self] in
-                self?.outgoingTransfer?.recordCompletion()
+            let progresses = session.sendFiles(files, to: peer) { [weak self] result in
+                switch result {
+                case .success:
+                    self?.outgoingTransfer?.recordCompletion()
+                case .failure(let error):
+                    log.error("sendFiles item failed: \(error.localizedDescription, privacy: .public)")
+                    self?.outgoingTransfer?.recordFailure()
+                }
                 if self?.outgoingTransfer?.isComplete == true {
                     Task { @MainActor [weak self] in
                         try? await Task.sleep(for: .seconds(1.5))

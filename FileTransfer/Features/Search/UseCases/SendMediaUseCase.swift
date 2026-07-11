@@ -1,5 +1,8 @@
 import Foundation
 import Observation
+import OSLog
+
+private let log = Logger(subsystem: "com.qstrnd.FileTransfer", category: "SendMedia")
 
 /// Orchestrates an outgoing media transfer: flattens MediaItems (including Live Photo
 /// pairs) into a file list, sends to every connected peer, tracks per-file completions,
@@ -64,8 +67,14 @@ final class SendMediaUseCase {
         let recordID = UUID()
 
         for peer in peers {
-            let progresses = session.sendMedia(files, to: peer) { [weak self] in
-                self?.outgoingTransfer?.recordCompletion()
+            let progresses = session.sendMedia(files, to: peer) { [weak self] result in
+                switch result {
+                case .success:
+                    self?.outgoingTransfer?.recordCompletion()
+                case .failure(let error):
+                    log.error("sendMedia item failed: \(error.localizedDescription, privacy: .public)")
+                    self?.outgoingTransfer?.recordFailure()
+                }
                 if self?.outgoingTransfer?.isComplete == true {
                     Task { @MainActor [weak self] in
                         try? await Task.sleep(for: .seconds(1.5))

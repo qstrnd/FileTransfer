@@ -20,7 +20,7 @@ final class AppCoordinator {
     var savedProfile: UserProfile? { profileStore.savedProfile }
 
     init(
-        service: any NearbySessionService = MultipeerNearbyService(),
+        service: any NearbySessionService = HybridNearbyService(),
         identityStore: any DeviceIdentityStore = UserDefaultsDeviceIdentityStore(),
         connectionHistory: any ConnectionHistoryStore = UserDefaultsConnectionHistoryStore(),
         profileStore: any UserProfileStore = UserDefaultsUserProfileStore()

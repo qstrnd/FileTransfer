@@ -11,12 +11,14 @@ struct SendingTransferStatus: Identifiable {
     let isComplete: Bool
     /// Byte-level progress 0–1. For contact transfers this is binary (0 or 1).
     let progress: Double
+    /// Item-sends that terminally failed (all transports/retries exhausted).
+    var failedItems: Int = 0
 }
 
 extension OutgoingMediaTransfer {
     var sendingStatus: SendingTransferStatus {
         SendingTransferStatus(id: id, totalItems: totalItems, peerCount: peerCount,
-                              isComplete: isComplete, progress: progress)
+                              isComplete: isComplete, progress: progress, failedItems: failures)
     }
 }
 
@@ -30,7 +32,7 @@ extension OutgoingContactTransfer {
 extension OutgoingFileTransfer {
     var sendingStatus: SendingTransferStatus {
         SendingTransferStatus(id: id, totalItems: totalFiles, peerCount: peerCount,
-                              isComplete: isComplete, progress: progress)
+                              isComplete: isComplete, progress: progress, failedItems: failures)
     }
 }
 
@@ -59,8 +61,13 @@ struct SendingTransferAlert: View {
     private func card(for transfer: SendingTransferStatus) -> some View {
         VStack(spacing: 0) {
             if transfer.isComplete {
-                completeContent
-                    .transition(.scale(scale: 0.7).combined(with: .opacity))
+                if transfer.failedItems > 0 {
+                    failedContent(failedItems: transfer.failedItems)
+                        .transition(.scale(scale: 0.7).combined(with: .opacity))
+                } else {
+                    completeContent
+                        .transition(.scale(scale: 0.7).combined(with: .opacity))
+                }
             } else {
                 sendingContent(for: transfer)
                     .transition(.opacity)
@@ -120,6 +127,22 @@ struct SendingTransferAlert: View {
         .padding(.vertical, 44)
         .padding(.horizontal, 24)
     }
+
+    // MARK: - Failed state
+
+    private func failedContent(failedItems: Int) -> some View {
+        VStack(spacing: 16) {
+            Image(systemName: "xmark.circle.fill")
+                .foregroundStyle(.red)
+                .font(.system(size: 64))
+            Text("Failed to send \(failedItems) item\(failedItems == 1 ? "" : "s")")
+                .font(.title3.weight(.semibold))
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 44)
+        .padding(.horizontal, 24)
+    }
 }
 
 // MARK: - Previews
@@ -140,6 +163,16 @@ struct SendingTransferAlert: View {
         Color(.systemGroupedBackground).ignoresSafeArea()
         SendingTransferAlert(
             transfer: SendingTransferStatus(id: UUID(), totalItems: 5, peerCount: 2, isComplete: true, progress: 1),
+            onAbort: {}
+        )
+    }
+}
+
+#Preview("Sending — failed") {
+    ZStack {
+        Color(.systemGroupedBackground).ignoresSafeArea()
+        SendingTransferAlert(
+            transfer: SendingTransferStatus(id: UUID(), totalItems: 5, peerCount: 2, isComplete: true, progress: 0.6, failedItems: 2),
             onAbort: {}
         )
     }

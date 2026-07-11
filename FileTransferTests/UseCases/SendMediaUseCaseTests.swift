@@ -15,12 +15,12 @@ private final class SpyNearbySessionService: NearbySessionService {
     func disconnect(from peer: Peer) {}
     func send(text: String, to peer: Peer) {}
     @discardableResult
-    func sendMedia(_ files: [MediaFileToSend], to peer: Peer, onItemSent: @escaping @MainActor () -> Void) -> [Progress] {
+    func sendMedia(_ files: [MediaFileToSend], to peer: Peer, onItemCompleted: @escaping @MainActor (Result<Void, TransferSendError>) -> Void) -> [Progress] {
         sendMediaCalls.append((files, peer))
         return []
     }
     @discardableResult
-    func sendFiles(_ files: [FileToSend], to peer: Peer, onItemSent: @escaping @MainActor () -> Void) -> [Progress] { [] }
+    func sendFiles(_ files: [FileToSend], to peer: Peer, onItemCompleted: @escaping @MainActor (Result<Void, TransferSendError>) -> Void) -> [Progress] { [] }
     func sendContact(data: Data, to peer: Peer) {}
     func sendPing(to peer: Peer) {}
     func sendPong(to peer: Peer) {}
