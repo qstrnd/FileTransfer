@@ -27,6 +27,10 @@ protocol FileTransferServerGate: AnyObject {
     func start(deviceID: UUID, displayName: String)
     /// Stops listening and cancels any in-flight receptions.
     func stop()
+    /// Stops listening/advertising but lets in-flight receptions finish
+    /// (used when the app backgrounds mid-reception under a background task);
+    /// completes into a full stop once the last reception drains.
+    func drain()
     var activeReceptionCount: Int { get }
 }
 

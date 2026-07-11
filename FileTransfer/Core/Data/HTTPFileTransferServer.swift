@@ -22,7 +22,6 @@ final class HTTPFileTransferServer: FileTransferServerGate {
 
     // Handlers are registered/removed on the main actor; each handler's own
     // state lives on its connection queue.
-    private var handlers: Set<ObjectIdentifier> = []
     private var handlerRefs: [ObjectIdentifier: HTTPConnectionHandler] = [:]
     private let ledger = TransferReceptionLedger()
 
@@ -68,15 +67,29 @@ final class HTTPFileTransferServer: FileTransferServerGate {
     }
 
     func stop() {
-        guard listener != nil else { return }
+        guard listener != nil || !handlerRefs.isEmpty else { return }
         Self.log.info("server stopping — cancelling \(self.handlerRefs.count) connection(s)")
+        isDraining = false
         listener?.cancel()
         listener = nil
         for handler in handlerRefs.values { handler.cancel() }
         handlerRefs.removeAll()
-        handlers.removeAll()
+        bodyStartedIDs.removeAll()
         setActiveReceptions(0)
         ledger.reset()
+    }
+
+    private var isDraining = false
+
+    func drain() {
+        guard !handlerRefs.isEmpty else {
+            stop()
+            return
+        }
+        Self.log.info("server draining — \(self.handlerRefs.count) reception(s) in flight")
+        isDraining = true
+        listener?.cancel()
+        listener = nil
     }
 
     // MARK: - Connections
@@ -131,6 +144,11 @@ final class HTTPFileTransferServer: FileTransferServerGate {
             Self.log.info("duplicate upload answered 409 for \(item.transferID, privacy: .public)/\(item.index)")
         case .failed(let reason):
             Self.log.warning("reception ended without delivery: \(reason, privacy: .public)")
+        }
+
+        if isDraining && handlerRefs.isEmpty {
+            Self.log.info("drain complete — server fully stopped")
+            stop()
         }
     }
 

@@ -38,9 +38,11 @@ final class HybridNearbyService: NearbySessionService {
         self.policy = policy
         // Mini composition root for the transfer stack: the coordinator needs
         // the same MPC instance (for transferID-preserving fallback) and the
-        // same resolver (for endpoint refresh between retries).
+        // same resolver (for endpoint refresh between retries). The upload
+        // client is the shared background-session instance so cold background
+        // launches can reattach it before any facade exists.
         self.httpSender = httpSender ?? HTTPTransferSendCoordinator(
-            uploadGate: BackgroundURLSessionUploadClient(),
+            uploadGate: BackgroundURLSessionUploadClient.shared,
             endpointResolver: endpointResolver,
             mpcFallback: mpc
         )
@@ -57,11 +59,24 @@ final class HybridNearbyService: NearbySessionService {
         httpSender.setLocalIdentity(deviceID: deviceID, displayName: displayName)
     }
 
+    /// Stops the control plane immediately, but with drain semantics for the
+    /// data plane: in-flight HTTP receptions finish under a background task,
+    /// and in-flight background uploads are deliberately NOT cancelled — they
+    /// continue in nsurlsessiond after the app suspends. (The view model
+    /// calls stop() on every backgrounding.) While stopped, MPC fallback is
+    /// unavailable, so uploads that fail late report an honest failure.
     func stop() {
         mpc.stop()
-        server.stop()
         endpointResolver.stop()
+        if server.activeReceptionCount > 0 {
+            backgroundKeeper.hasActiveWork = true
+            server.drain()
+        } else {
+            server.stop()
+        }
     }
+
+    private let backgroundKeeper = BackgroundActivityKeeper()
 
     func connect(to peer: Peer, isReconnect: Bool) { mpc.connect(to: peer, isReconnect: isReconnect) }
     func disconnect(from peer: Peer)               { mpc.disconnect(from: peer) }
@@ -182,6 +197,8 @@ extension HybridNearbyService: FileTransferServerDelegate {
     }
 
     func serverReceptionActivityChanged(activeCount: Int) {
-        // Phase 2: drives the background-task keeper while receptions are in flight.
+        // Keeps the process alive through brief backgrounding while receptions
+        // are mid-flight; released (after a grace period) when they drain.
+        backgroundKeeper.hasActiveWork = activeCount > 0
     }
 }

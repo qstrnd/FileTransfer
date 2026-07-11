@@ -12,7 +12,18 @@ import OSLog
 @MainActor
 final class BackgroundURLSessionUploadClient: NSObject, FileUploadGate {
     nonisolated private static let log = Logger(subsystem: "com.qstrnd.FileTransfer", category: "UploadClient")
-    static let sessionIdentifier = "com.qstrnd.FileTransfer.upload"
+    nonisolated static let sessionIdentifier = "com.qstrnd.FileTransfer.upload"
+
+    /// One background session identifier ⇒ one client. The facade composes
+    /// against this instance, and `awakeForBackgroundEvents` can reattach the
+    /// session on a cold background launch without the facade existing yet.
+    static let shared = BackgroundURLSessionUploadClient()
+
+    /// Forces session (re)creation so a cold-launched app reattaches the
+    /// delegate and receives the queued task completions.
+    static func awakeForBackgroundEvents() {
+        _ = shared.session
+    }
 
     weak var events: (any FileUploadEvents)?
 
@@ -94,6 +105,16 @@ extension BackgroundURLSessionUploadClient: URLSessionTaskDelegate {
             if let itemKey = itemKeyByTask[taskID] {
                 events?.uploadProgressed(itemKey: itemKey, sentBytes: totalBytesSent, totalBytes: totalBytesExpectedToSend)
             }
+        }
+    }
+
+    /// Fired after a relaunched-for-background-events session has delivered
+    /// all queued callbacks; hands control back to iOS via the stored handler.
+    nonisolated func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
+        let identifier = session.configuration.identifier
+        Task { @MainActor in
+            Self.log.info("background session events drained")
+            BackgroundSessionCompletionStore.shared.complete(session: identifier ?? Self.sessionIdentifier)
         }
     }
 
