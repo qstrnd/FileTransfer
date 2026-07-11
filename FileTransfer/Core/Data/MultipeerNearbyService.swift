@@ -188,6 +188,12 @@ final class MultipeerNearbyService: NSObject, NearbySessionService {
     }
 }
 
+// MARK: - MPCBatchFallback
+
+// The transferID-preserving overloads above are exactly the fallback surface
+// HTTPTransferSendCoordinator needs; the conformance is declarative.
+extension MultipeerNearbyService: MPCBatchFallback {}
+
 // MARK: - MCSessionDelegate
 
 extension MultipeerNearbyService: MCSessionDelegate {

@@ -21,13 +21,29 @@ final class HybridNearbyService: NearbySessionService {
 
     private let mpc: MultipeerNearbyService
     private let server: any FileTransferServerGate
+    private let endpointResolver: any PeerEndpointResolving
+    private let policy: any TransportPolicy
+    private let httpSender: any HTTPTransferSending
 
     init(
         mpc: MultipeerNearbyService = MultipeerNearbyService(),
-        server: any FileTransferServerGate = HTTPFileTransferServer()
+        server: any FileTransferServerGate = HTTPFileTransferServer(),
+        endpointResolver: any PeerEndpointResolving = BonjourPeerEndpointResolver(),
+        policy: any TransportPolicy = DefaultTransportPolicy(),
+        httpSender: (any HTTPTransferSending)? = nil
     ) {
         self.mpc = mpc
         self.server = server
+        self.endpointResolver = endpointResolver
+        self.policy = policy
+        // Mini composition root for the transfer stack: the coordinator needs
+        // the same MPC instance (for transferID-preserving fallback) and the
+        // same resolver (for endpoint refresh between retries).
+        self.httpSender = httpSender ?? HTTPTransferSendCoordinator(
+            uploadGate: BackgroundURLSessionUploadClient(),
+            endpointResolver: endpointResolver,
+            mpcFallback: mpc
+        )
         mpc.delegate = self
         server.delegate = self
     }
@@ -37,11 +53,14 @@ final class HybridNearbyService: NearbySessionService {
     func start(displayName: String, deviceID: UUID) {
         mpc.start(displayName: displayName, deviceID: deviceID)
         server.start(deviceID: deviceID, displayName: displayName)
+        endpointResolver.start()
+        httpSender.setLocalIdentity(deviceID: deviceID, displayName: displayName)
     }
 
     func stop() {
         mpc.stop()
         server.stop()
+        endpointResolver.stop()
     }
 
     func connect(to peer: Peer, isReconnect: Bool) { mpc.connect(to: peer, isReconnect: isReconnect) }
@@ -57,12 +76,33 @@ final class HybridNearbyService: NearbySessionService {
 
     @discardableResult
     func sendMedia(_ files: [MediaFileToSend], to peer: Peer, onItemCompleted: @escaping @MainActor (Result<Void, TransferSendError>) -> Void) -> [Progress] {
-        mpc.sendMedia(files, to: peer, onItemCompleted: onItemCompleted)
+        switch dataTransport(for: .media, to: peer, files: files.map(\.url)) {
+        case .http(let endpoint):
+            return httpSender.sendMedia(files, to: peer, endpoint: endpoint, onItemCompleted: onItemCompleted)
+        case .multipeer:
+            return mpc.sendMedia(files, to: peer, onItemCompleted: onItemCompleted)
+        }
     }
 
     @discardableResult
     func sendFiles(_ files: [FileToSend], to peer: Peer, onItemCompleted: @escaping @MainActor (Result<Void, TransferSendError>) -> Void) -> [Progress] {
-        mpc.sendFiles(files, to: peer, onItemCompleted: onItemCompleted)
+        switch dataTransport(for: .file, to: peer, files: files.map(\.url)) {
+        case .http(let endpoint):
+            return httpSender.sendFiles(files, to: peer, endpoint: endpoint, onItemCompleted: onItemCompleted)
+        case .multipeer:
+            return mpc.sendFiles(files, to: peer, onItemCompleted: onItemCompleted)
+        }
+    }
+
+    private func dataTransport(for payload: TransferPayloadKind, to peer: Peer, files: [URL]) -> TransferTransport {
+        let endpoint = peer.deviceID.flatMap { endpointResolver.cachedEndpoint(for: $0) }
+        let totalBytes = files.reduce(Int64(0)) { sum, url in
+            let size = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int64
+            return sum + (size ?? 0)
+        }
+        let transport = policy.transport(payload: payload, totalBytes: totalBytes, endpoint: endpoint)
+        Self.log.info("route \(files.count) file(s), \(totalBytes) bytes → \(String(describing: transport), privacy: .public)")
+        return transport
     }
 }
 
