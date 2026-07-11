@@ -19,6 +19,7 @@ final class HTTPTransferSendCoordinator: HTTPTransferSending {
     private let retryPolicy: TransferRetryPolicy
     private let endpointResolver: any PeerEndpointResolving
     private weak var mpcFallback: (any MPCBatchFallback)?
+    private let activityGate: (any TransferActivityGate)?
 
     private var localIdentity: TransferHTTPHeaders.Sender?
 
@@ -27,13 +28,15 @@ final class HTTPTransferSendCoordinator: HTTPTransferSending {
         endpointResolver: any PeerEndpointResolving,
         mpcFallback: any MPCBatchFallback,
         checksummer: any Checksumming = StreamingSHA256Hasher(),
-        retryPolicy: TransferRetryPolicy = TransferRetryPolicy()
+        retryPolicy: TransferRetryPolicy = TransferRetryPolicy(),
+        activityGate: (any TransferActivityGate)? = nil
     ) {
         self.uploadGate = uploadGate
         self.endpointResolver = endpointResolver
         self.mpcFallback = mpcFallback
         self.checksummer = checksummer
         self.retryPolicy = retryPolicy
+        self.activityGate = activityGate
         uploadGate.events = self
     }
 
@@ -168,6 +171,10 @@ final class HTTPTransferSendCoordinator: HTTPTransferSending {
         }
         batches[transferID] = batch
         Self.log.info("batch \(transferID, privacy: .public) → \(peer.displayName, privacy: .public): \(items.count) item(s) via HTTP")
+        activityGate?.startActivity(
+            key: transferID, peerName: peer.displayName,
+            direction: .send, totalItems: items.count
+        )
 
         for item in items {
             Task { [weak self] in
@@ -175,6 +182,18 @@ final class HTTPTransferSendCoordinator: HTTPTransferSending {
             }
         }
         return items.map(\.progress)
+    }
+
+    /// Aggregated batch progress for the Live Activity: byte fraction across
+    /// all items + count of terminally-delivered items.
+    private func notifyActivityProgress(_ batch: Batch) {
+        guard activityGate != nil else { return }
+        let items = batch.items.values
+        let totalBytes = items.reduce(Int64(0)) { $0 + $1.progress.totalUnitCount }
+        let sentBytes = items.reduce(Int64(0)) { $0 + $1.progress.completedUnitCount }
+        let delivered = items.count { if case .delivered = $0.state { true } else { false } }
+        let progress = totalBytes > 0 ? Double(sentBytes) / Double(totalBytes) : 0
+        activityGate?.updateActivity(key: batch.transferID, progress: progress, completedItems: delivered)
     }
 
     private func prepareAndUpload(itemKey: String) async {
@@ -337,6 +356,7 @@ final class HTTPTransferSendCoordinator: HTTPTransferSending {
                     target.completedUnitCount =
                         Int64(source.fractionCompleted * Double(target.totalUnitCount))
                 }
+                notifyActivityProgress(batch)
             }
         }
     }
@@ -360,6 +380,12 @@ final class HTTPTransferSendCoordinator: HTTPTransferSending {
             Self.log.info("batch \(batch.transferID, privacy: .public) finished")
             batch.mpcMirrorTask?.cancel()
             batches[batch.transferID] = nil
+            let anyFailed = batch.items.values.contains {
+                if case .failed = $0.state { true } else { false }
+            }
+            activityGate?.endActivity(key: batch.transferID, outcome: anyFailed ? .failure : .success)
+        } else {
+            notifyActivityProgress(batch)
         }
     }
 
@@ -403,6 +429,7 @@ extension HTTPTransferSendCoordinator: FileUploadEvents {
               case .uploading = item.state else { return }
         if totalBytes > 0 { item.progress.totalUnitCount = totalBytes }
         item.progress.completedUnitCount = sentBytes
+        notifyActivityProgress(batch)
     }
 
     func uploadFinished(itemKey: String, outcome: FileUploadOutcome) {

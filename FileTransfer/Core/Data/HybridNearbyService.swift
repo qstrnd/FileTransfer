@@ -24,30 +24,72 @@ final class HybridNearbyService: NearbySessionService {
     private let endpointResolver: any PeerEndpointResolving
     private let policy: any TransportPolicy
     private let httpSender: any HTTPTransferSending
+    private let activityGate: any TransferActivityGate
 
     init(
         mpc: MultipeerNearbyService = MultipeerNearbyService(),
         server: any FileTransferServerGate = HTTPFileTransferServer(),
         endpointResolver: any PeerEndpointResolving = BonjourPeerEndpointResolver(),
         policy: any TransportPolicy = DefaultTransportPolicy(),
-        httpSender: (any HTTPTransferSending)? = nil
+        httpSender: (any HTTPTransferSending)? = nil,
+        activityGate: any TransferActivityGate = TransferActivityController()
     ) {
         self.mpc = mpc
         self.server = server
         self.endpointResolver = endpointResolver
         self.policy = policy
+        self.activityGate = activityGate
         // Mini composition root for the transfer stack: the coordinator needs
-        // the same MPC instance (for transferID-preserving fallback) and the
-        // same resolver (for endpoint refresh between retries). The upload
-        // client is the shared background-session instance so cold background
-        // launches can reattach it before any facade exists.
+        // the same MPC instance (for transferID-preserving fallback), the
+        // same resolver (for endpoint refresh between retries), and the same
+        // activity gate (so send + receive activities share one controller).
+        // The upload client is the shared background-session instance so cold
+        // background launches can reattach it before any facade exists.
         self.httpSender = httpSender ?? HTTPTransferSendCoordinator(
             uploadGate: BackgroundURLSessionUploadClient.shared,
             endpointResolver: endpointResolver,
-            mpcFallback: mpc
+            mpcFallback: mpc,
+            activityGate: activityGate
         )
         mpc.delegate = self
         server.delegate = self
+    }
+
+    // MARK: - Receive-side Live Activity accounting
+
+    /// Distinct received member-keys per transferID; a transfer's activity
+    /// ends in success when the count reaches the expected total. Keyed
+    /// member format: media "<index>" (logical items; LP videos excluded),
+    /// files "<index>". Mixed-transport batches merge naturally because the
+    /// MPC fallback preserves the transferID.
+    private var receiveTallies: [String: (received: Set<Int>, total: Int)] = [:]
+
+    private func trackReceiveStart(transferID: String, totalCount: Int, peer: Peer) {
+        guard receiveTallies[transferID] == nil else { return }
+        receiveTallies[transferID] = ([], totalCount)
+        activityGate.startActivity(
+            key: transferID, peerName: peer.displayName,
+            direction: .receive, totalItems: totalCount
+        )
+    }
+
+    private func trackReceiveItem(transferID: String, index: Int, totalCount: Int, peer: Peer) {
+        // A start can be missed (out-of-order arrival); create the tally lazily.
+        trackReceiveStart(transferID: transferID, totalCount: totalCount, peer: peer)
+        guard var tally = receiveTallies[transferID] else { return }
+        tally.received.insert(index)
+        receiveTallies[transferID] = tally
+        if tally.received.count >= tally.total {
+            receiveTallies[transferID] = nil
+            activityGate.updateActivity(key: transferID, progress: 1, completedItems: tally.total)
+            activityGate.endActivity(key: transferID, outcome: .success)
+        } else {
+            activityGate.updateActivity(
+                key: transferID,
+                progress: Double(tally.received.count) / Double(max(1, tally.total)),
+                completedItems: tally.received.count
+            )
+        }
     }
 
     // MARK: - NearbySessionService (control plane — always MPC)
@@ -57,6 +99,12 @@ final class HybridNearbyService: NearbySessionService {
         server.start(deviceID: deviceID, displayName: displayName)
         endpointResolver.start()
         httpSender.setLocalIdentity(deviceID: deviceID, displayName: displayName)
+        // Receives that never completed (suspension killed the listener while
+        // the sender's retries also ran out) end honestly on the next launch.
+        for transferID in receiveTallies.keys {
+            activityGate.endActivity(key: transferID, outcome: .failure)
+        }
+        receiveTallies.removeAll()
     }
 
     /// Stops the control plane immediately, but with drain semantics for the
@@ -136,6 +184,7 @@ extension HybridNearbyService: NearbySessionServiceDelegate {
     func didReceivePong(from peer: Peer)          { delegate?.didReceivePong(from: peer) }
 
     func didStartReceivingMedia(transferID: String, totalCount: Int, from peer: Peer) {
+        trackReceiveStart(transferID: transferID, totalCount: totalCount, peer: peer)
         delegate?.didStartReceivingMedia(transferID: transferID, totalCount: totalCount, from: peer)
     }
 
@@ -144,6 +193,11 @@ extension HybridNearbyService: NearbySessionServiceDelegate {
         at url: URL, kind: MediaFileKind, fileName: String?,
         from peer: Peer
     ) {
+        // LP companion videos share their still's logical index; only count
+        // logical items against the total.
+        if kind != .livePhotoVideo {
+            trackReceiveItem(transferID: transferID, index: index, totalCount: totalCount, peer: peer)
+        }
         delegate?.didReceiveMediaItem(
             transferID: transferID, index: index, totalCount: totalCount,
             at: url, kind: kind, fileName: fileName, from: peer
@@ -151,6 +205,7 @@ extension HybridNearbyService: NearbySessionServiceDelegate {
     }
 
     func didStartReceivingFile(transferID: String, totalCount: Int, from peer: Peer) {
+        trackReceiveStart(transferID: transferID, totalCount: totalCount, peer: peer)
         delegate?.didStartReceivingFile(transferID: transferID, totalCount: totalCount, from: peer)
     }
 
@@ -159,6 +214,7 @@ extension HybridNearbyService: NearbySessionServiceDelegate {
         at url: URL, name: String,
         from peer: Peer
     ) {
+        trackReceiveItem(transferID: transferID, index: index, totalCount: totalCount, peer: peer)
         delegate?.didReceiveFile(
             transferID: transferID, index: index, totalCount: totalCount,
             at: url, name: name, from: peer
@@ -169,27 +225,31 @@ extension HybridNearbyService: NearbySessionServiceDelegate {
 // MARK: - FileTransferServerDelegate (HTTP receptions → same delegate callbacks)
 
 extension HybridNearbyService: FileTransferServerDelegate {
+    // HTTP receptions funnel through the same forwarding methods the MPC
+    // delegate path uses, so delegate fan-out and Live Activity accounting
+    // live in exactly one place per event.
+
     func serverDidStartReceiving(item: IncomingTransferItemInfo, from peer: Peer) {
         switch item.payload {
         case .media:
             // Match the MPC path's behavior: LP companion videos never announce
             // a transfer start (MultipeerNearbyService skips .livePhotoVideo).
             guard item.kind != .livePhotoVideo else { return }
-            delegate?.didStartReceivingMedia(transferID: item.transferID, totalCount: item.total, from: peer)
+            didStartReceivingMedia(transferID: item.transferID, totalCount: item.total, from: peer)
         case .file:
-            delegate?.didStartReceivingFile(transferID: item.transferID, totalCount: item.total, from: peer)
+            didStartReceivingFile(transferID: item.transferID, totalCount: item.total, from: peer)
         }
     }
 
     func serverDidReceive(item: IncomingTransferItemInfo, at url: URL, from peer: Peer) {
         switch item.payload {
         case .media:
-            delegate?.didReceiveMediaItem(
+            didReceiveMediaItem(
                 transferID: item.transferID, index: item.index, totalCount: item.total,
                 at: url, kind: item.kind, fileName: item.fileName, from: peer
             )
         case .file:
-            delegate?.didReceiveFile(
+            didReceiveFile(
                 transferID: item.transferID, index: item.index, totalCount: item.total,
                 at: url, name: item.fileName ?? "file", from: peer
             )
