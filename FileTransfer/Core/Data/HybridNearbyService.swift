@@ -24,7 +24,9 @@ final class HybridNearbyService: NearbySessionService {
     private let endpointResolver: any PeerEndpointResolving
     private let policy: any TransportPolicy
     private let httpSender: any HTTPTransferSending
-    private let activityGate: any TransferActivityGate
+    /// Nil when `TransferFeatureFlags.backgroundTransferAndLiveActivity` is
+    /// off — no activities are requested anywhere in the stack.
+    private let activityGate: (any TransferActivityGate)?
 
     init(
         mpc: MultipeerNearbyService = MultipeerNearbyService(),
@@ -32,7 +34,8 @@ final class HybridNearbyService: NearbySessionService {
         endpointResolver: any PeerEndpointResolving = BonjourPeerEndpointResolver(),
         policy: any TransportPolicy = DefaultTransportPolicy(),
         httpSender: (any HTTPTransferSending)? = nil,
-        activityGate: any TransferActivityGate = TransferActivityController()
+        activityGate: (any TransferActivityGate)? =
+            TransferFeatureFlags.backgroundTransferAndLiveActivity ? TransferActivityController() : nil
     ) {
         self.mpc = mpc
         self.server = server
@@ -67,7 +70,7 @@ final class HybridNearbyService: NearbySessionService {
     private func trackReceiveStart(transferID: String, totalCount: Int, peer: Peer) {
         guard receiveTallies[transferID] == nil else { return }
         receiveTallies[transferID] = ([], totalCount)
-        activityGate.startActivity(
+        activityGate?.startActivity(
             key: transferID, peerName: peer.displayName,
             direction: .receive, totalItems: totalCount
         )
@@ -81,10 +84,10 @@ final class HybridNearbyService: NearbySessionService {
         receiveTallies[transferID] = tally
         if tally.received.count >= tally.total {
             receiveTallies[transferID] = nil
-            activityGate.updateActivity(key: transferID, progress: 1, completedItems: tally.total)
-            activityGate.endActivity(key: transferID, outcome: .success)
+            activityGate?.updateActivity(key: transferID, progress: 1, completedItems: tally.total)
+            activityGate?.endActivity(key: transferID, outcome: .success)
         } else {
-            activityGate.updateActivity(
+            activityGate?.updateActivity(
                 key: transferID,
                 progress: Double(tally.received.count) / Double(max(1, tally.total)),
                 completedItems: tally.received.count
@@ -96,27 +99,30 @@ final class HybridNearbyService: NearbySessionService {
 
     func start(displayName: String, deviceID: UUID) {
         mpc.start(displayName: displayName, deviceID: deviceID)
-        server.start(deviceID: deviceID, displayName: displayName)
-        endpointResolver.start()
-        httpSender.setLocalIdentity(deviceID: deviceID, displayName: displayName)
+        if TransferFeatureFlags.httpDataPlane {
+            server.start(deviceID: deviceID, displayName: displayName)
+            endpointResolver.start()
+            httpSender.setLocalIdentity(deviceID: deviceID, displayName: displayName)
+        }
         // Receives that never completed (suspension killed the listener while
         // the sender's retries also ran out) end honestly on the next launch.
         for transferID in receiveTallies.keys {
-            activityGate.endActivity(key: transferID, outcome: .failure)
+            activityGate?.endActivity(key: transferID, outcome: .failure)
         }
         receiveTallies.removeAll()
     }
 
-    /// Stops the control plane immediately, but with drain semantics for the
-    /// data plane: in-flight HTTP receptions finish under a background task,
-    /// and in-flight background uploads are deliberately NOT cancelled — they
-    /// continue in nsurlsessiond after the app suspends. (The view model
-    /// calls stop() on every backgrounding.) While stopped, MPC fallback is
-    /// unavailable, so uploads that fail late report an honest failure.
+    /// Stops the control plane immediately. When background continuation is
+    /// enabled, the data plane gets drain semantics instead: in-flight HTTP
+    /// receptions finish under a background task, and in-flight background
+    /// uploads are deliberately NOT cancelled — they continue in nsurlsessiond
+    /// after the app suspends. (The view model calls stop() on every
+    /// backgrounding.) While stopped, MPC fallback is unavailable, so uploads
+    /// that fail late report an honest failure.
     func stop() {
         mpc.stop()
         endpointResolver.stop()
-        if server.activeReceptionCount > 0 {
+        if TransferFeatureFlags.backgroundTransferAndLiveActivity, server.activeReceptionCount > 0 {
             backgroundKeeper.hasActiveWork = true
             server.drain()
         } else {
@@ -158,6 +164,7 @@ final class HybridNearbyService: NearbySessionService {
     }
 
     private func dataTransport(for payload: TransferPayloadKind, to peer: Peer, files: [URL]) -> TransferTransport {
+        guard TransferFeatureFlags.httpDataPlane else { return .multipeer }
         let endpoint = peer.deviceID.flatMap { endpointResolver.cachedEndpoint(for: $0) }
         let totalBytes = files.reduce(Int64(0)) { sum, url in
             let size = (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int64
@@ -259,6 +266,7 @@ extension HybridNearbyService: FileTransferServerDelegate {
     func serverReceptionActivityChanged(activeCount: Int) {
         // Keeps the process alive through brief backgrounding while receptions
         // are mid-flight; released (after a grace period) when they drain.
+        guard TransferFeatureFlags.backgroundTransferAndLiveActivity else { return }
         backgroundKeeper.hasActiveWork = activeCount > 0
     }
 }

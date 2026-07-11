@@ -28,9 +28,13 @@ final class BackgroundURLSessionUploadClient: NSObject, FileUploadGate {
     weak var events: (any FileUploadEvents)?
 
     private lazy var session: URLSession = {
-        let config = URLSessionConfiguration.background(withIdentifier: Self.sessionIdentifier)
+        // With background continuation off, a plain ephemeral session keeps
+        // uploads strictly foreground-scoped (they suspend with the app).
+        let config = TransferFeatureFlags.backgroundTransferAndLiveActivity
+            ? URLSessionConfiguration.background(withIdentifier: Self.sessionIdentifier)
+            : .ephemeral
         config.isDiscretionary = false
-        config.sessionSendsLaunchEvents = true
+        config.sessionSendsLaunchEvents = TransferFeatureFlags.backgroundTransferAndLiveActivity
         config.allowsCellularAccess = false
         // LAN peers should fail fast so the retry policy governs recovery,
         // not the session's own connectivity waiting.
