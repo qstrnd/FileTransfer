@@ -56,6 +56,9 @@ final class HybridNearbyService: NearbySessionService {
         )
         mpc.delegate = self
         server.delegate = self
+        self.httpSender.onIdle = { [weak self] in
+            self?.transferStackActivityChanged()
+        }
     }
 
     // MARK: - Receive-side Live Activity accounting
@@ -98,6 +101,7 @@ final class HybridNearbyService: NearbySessionService {
     // MARK: - NearbySessionService (control plane — always MPC)
 
     func start(displayName: String, deviceID: UUID) {
+        stopDeferred = false
         mpc.start(displayName: displayName, deviceID: deviceID)
         if TransferFeatureFlags.httpDataPlane {
             server.start(deviceID: deviceID, displayName: displayName)
@@ -112,25 +116,56 @@ final class HybridNearbyService: NearbySessionService {
         receiveTallies.removeAll()
     }
 
-    /// Stops the control plane immediately. When background continuation is
-    /// enabled, the data plane gets drain semantics instead: in-flight HTTP
-    /// receptions finish under a background task, and in-flight background
-    /// uploads are deliberately NOT cancelled — they continue in nsurlsessiond
-    /// after the app suspends. (The view model calls stop() on every
-    /// backgrounding.) While stopped, MPC fallback is unavailable, so uploads
-    /// that fail late report an honest failure.
+    /// Stops the session — but not out from under an in-flight transfer.
+    ///
+    /// The view model calls stop() on every backgrounding. With background
+    /// continuation enabled and a transfer running (outgoing batches or
+    /// inbound receptions), tearing MPC down here is what made the peer see
+    /// us as "disconnected" the instant we backgrounded, mid-transfer. So
+    /// instead the whole teardown is deferred: MPC and the endpoint resolver
+    /// stay up (pongs keep flowing and upload retries can re-resolve while
+    /// the process lives), the server drains, and a background task keeps the
+    /// process alive as long as iOS allows. The deferred stop completes when
+    /// the transfer stack goes idle — or is cancelled by the next start().
+    /// Uploads themselves are never cancelled; they continue in nsurlsessiond
+    /// even after the process suspends.
     func stop() {
-        mpc.stop()
-        endpointResolver.stop()
-        if TransferFeatureFlags.backgroundTransferAndLiveActivity, server.activeReceptionCount > 0 {
-            backgroundKeeper.hasActiveWork = true
-            server.drain()
-        } else {
+        let transfersActive = TransferFeatureFlags.backgroundTransferAndLiveActivity
+            && (!httpSender.isIdle || server.activeReceptionCount > 0)
+        guard transfersActive else {
+            stopDeferred = false
+            mpc.stop()
+            endpointResolver.stop()
             server.stop()
+            backgroundKeeper.hasActiveWork = false
+            return
         }
+        Self.log.info("stop deferred — transfers in flight (sendsIdle=\(self.httpSender.isIdle) receptions=\(self.server.activeReceptionCount))")
+        stopDeferred = true
+        backgroundKeeper.hasActiveWork = true
+        server.drain()
     }
 
     private let backgroundKeeper = BackgroundActivityKeeper()
+    /// A stop() arrived while transfers were in flight; complete it when the
+    /// transfer stack goes idle (see `transferStackActivityChanged`).
+    private var stopDeferred = false
+
+    /// Called whenever sends go idle or the reception count changes; keeps
+    /// the background task alive exactly as long as there is transfer work,
+    /// and finishes a deferred stop once nothing is in flight.
+    private func transferStackActivityChanged() {
+        guard TransferFeatureFlags.backgroundTransferAndLiveActivity else { return }
+        let busy = !httpSender.isIdle || server.activeReceptionCount > 0
+        backgroundKeeper.hasActiveWork = busy
+        if stopDeferred && !busy {
+            Self.log.info("deferred stop completing — transfer stack idle")
+            stopDeferred = false
+            mpc.stop()
+            endpointResolver.stop()
+            server.stop()
+        }
+    }
 
     func connect(to peer: Peer, isReconnect: Bool) { mpc.connect(to: peer, isReconnect: isReconnect) }
     func disconnect(from peer: Peer)               { mpc.disconnect(from: peer) }
@@ -145,6 +180,7 @@ final class HybridNearbyService: NearbySessionService {
 
     @discardableResult
     func sendMedia(_ files: [MediaFileToSend], to peer: Peer, onItemCompleted: @escaping @MainActor (Result<Void, TransferSendError>) -> Void) -> [Progress] {
+        defer { transferStackActivityChanged() }
         switch dataTransport(for: .media, to: peer, files: files.map(\.url)) {
         case .http(let endpoint):
             return httpSender.sendMedia(files, to: peer, endpoint: endpoint, onItemCompleted: onItemCompleted)
@@ -155,6 +191,7 @@ final class HybridNearbyService: NearbySessionService {
 
     @discardableResult
     func sendFiles(_ files: [FileToSend], to peer: Peer, onItemCompleted: @escaping @MainActor (Result<Void, TransferSendError>) -> Void) -> [Progress] {
+        defer { transferStackActivityChanged() }
         switch dataTransport(for: .file, to: peer, files: files.map(\.url)) {
         case .http(let endpoint):
             return httpSender.sendFiles(files, to: peer, endpoint: endpoint, onItemCompleted: onItemCompleted)
@@ -264,9 +301,6 @@ extension HybridNearbyService: FileTransferServerDelegate {
     }
 
     func serverReceptionActivityChanged(activeCount: Int) {
-        // Keeps the process alive through brief backgrounding while receptions
-        // are mid-flight; released (after a grace period) when they drain.
-        guard TransferFeatureFlags.backgroundTransferAndLiveActivity else { return }
-        backgroundKeeper.hasActiveWork = activeCount > 0
+        transferStackActivityChanged()
     }
 }

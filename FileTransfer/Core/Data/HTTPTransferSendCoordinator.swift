@@ -109,6 +109,9 @@ final class HTTPTransferSendCoordinator: HTTPTransferSending {
         localIdentity = TransferHTTPHeaders.Sender(deviceID: deviceID, displayName: displayName)
     }
 
+    var isIdle: Bool { batches.isEmpty }
+    var onIdle: (@MainActor () -> Void)?
+
     func sendMedia(
         _ files: [MediaFileToSend], to peer: Peer, endpoint: PeerEndpoint,
         onItemCompleted: @escaping @MainActor (Result<Void, TransferSendError>) -> Void
@@ -384,6 +387,7 @@ final class HTTPTransferSendCoordinator: HTTPTransferSending {
                 if case .failed = $0.state { true } else { false }
             }
             activityGate?.endActivity(key: batch.transferID, outcome: anyFailed ? .failure : .success)
+            if batches.isEmpty { onIdle?() }
         } else {
             notifyActivityProgress(batch)
         }

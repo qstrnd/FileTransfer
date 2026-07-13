@@ -15,5 +15,5 @@ nonisolated enum TransferFeatureFlags {
     /// progress on the lock screen / Dynamic Island. When off, uploads use a
     /// regular foreground session, stop() tears the server down immediately,
     /// and no activities are requested.
-    static let backgroundTransferAndLiveActivity = false
+    static let backgroundTransferAndLiveActivity = true
 }

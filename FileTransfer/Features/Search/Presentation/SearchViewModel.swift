@@ -77,6 +77,11 @@ final class SearchViewModel {
     /// Peers the user explicitly disconnected from this session.
     /// Auto-reconnect is suppressed for these peers until handleForeground resets the session.
     private var manuallyDisconnectedPeers: Set<Peer.ID> = []
+    /// Peers whose session dropped mid-transfer (e.g. the sender backgrounded
+    /// and later suspended while its upload keeps running in nsurlsessiond).
+    /// They stay visibly connected until the transfer finishes, then the
+    /// deferred disconnect is applied by `flushPendingDisconnects`.
+    private var pendingDisconnects: [Peer.ID: Peer] = [:]
 
     init(
         emoji: String,
@@ -149,6 +154,7 @@ final class SearchViewModel {
             pendingInvitationFrom = nil
             expiredInvitationFrom = nil
         }
+        pendingDisconnects = [:]
         service.stop()
     }
 
@@ -169,6 +175,7 @@ final class SearchViewModel {
         lastPongReceived = [:]
         pendingLostPeers = []
         manuallyDisconnectedPeers = []
+        pendingDisconnects = [:]
         // Clear state BEFORE stopping so that any async delegate callbacks
         // triggered by session.disconnect() land on an already-clean map
         // and cannot re-set peers to .connected.
@@ -305,13 +312,44 @@ final class SearchViewModel {
 
     // Internal so tests can inject a specific timestamp without waiting real time.
     func checkKeepalive(now: Date) {
+        flushPendingDisconnects()
         for peer in connectedPeers {
-            if let last = lastPongReceived[peer.id], now.timeIntervalSince(last) > 15 {
+            // Session already dropped, disconnect deferred until the transfer
+            // finishes — nothing to ping or police.
+            guard pendingDisconnects[peer.id] == nil else { continue }
+            if let last = lastPongReceived[peer.id], now.timeIntervalSince(last) > 15,
+               !hasActiveTransfer(with: peer) {
+                // Stale pongs during an active transfer are expected (the peer
+                // may be backgrounded/suspended while its upload continues) —
+                // policing resumes once the transfer is done.
                 log.warning("keepalive — no pong from \(peer.displayName, privacy: .public), disconnecting")
                 service.disconnect(from: peer)
             } else {
                 service.sendPing(to: peer)
             }
+        }
+    }
+
+    // MARK: - Transfer-aware disconnect deferral
+
+    /// True while any transfer involving `peer` is running: an incoming
+    /// media/file transfer from them, or any outgoing batch (sends are
+    /// batched per-batch, not per-peer, so any in-flight send counts).
+    private func hasActiveTransfer(with peer: Peer) -> Bool {
+        if let media = receivingMediaTransfer, !media.isComplete, media.senderName == peer.displayName { return true }
+        if let file = receivingFileTransfer, !file.isComplete, file.senderName == peer.displayName { return true }
+        if let outgoing = outgoingMediaTransfer, !outgoing.isComplete { return true }
+        if let outgoing = outgoingFileTransfer, !outgoing.isComplete { return true }
+        return false
+    }
+
+    /// Applies deferred disconnects for peers whose transfers have finished.
+    /// Called on each keepalive tick and when a received transfer completes.
+    func flushPendingDisconnects() {
+        for (id, peer) in pendingDisconnects where !hasActiveTransfer(with: peer) {
+            log.info("flushing deferred disconnect for \(peer.displayName, privacy: .public)")
+            pendingDisconnects.removeValue(forKey: id)
+            peerDisconnected(peer)
         }
     }
 
@@ -455,6 +493,15 @@ extension SearchViewModel: PeerSessionEvents {
     }
 
     func peerDisconnected(_ peer: Peer) {
+        // A session drop mid-transfer is not a user-visible disconnect: the
+        // data plane (HTTP upload in nsurlsessiond) keeps delivering after
+        // the peer backgrounds and suspends. Keep them shown as connected and
+        // defer the disconnect until the transfer finishes.
+        if (peerStates[peer] ?? .idle) == .connected, hasActiveTransfer(with: peer) {
+            log.info("didDisconnect — deferred, transfer in progress with \(peer.displayName, privacy: .public)")
+            pendingDisconnects[peer.id] = peer
+            return
+        }
         lastPongReceived.removeValue(forKey: peer.id)
         reconnectingPeers.remove(peer.id)
         recentlyLaunchedPeers.remove(peer.id)
@@ -645,6 +692,7 @@ extension SearchViewModel: PeerSessionEvents {
             async let cachedURLs = attachmentCache.cache(srcURLs, names: mediaNames, forRecord: recordID)
             try? await Task.sleep(for: .seconds(1.2))
             receivingMediaTransfer = nil
+            flushPendingDisconnects()
             receivedMedia = ReceivedMediaTransfer(senderName: senderName, items: items)
             addRecord(TransferRecord(
                 id: recordID,
@@ -696,6 +744,7 @@ extension SearchViewModel: PeerSessionEvents {
             async let cachedURLs = attachmentCache.cache(srcURLs, names: fileNames, forRecord: recordID)
             try? await Task.sleep(for: .seconds(1.2))
             receivingFileTransfer = nil
+            flushPendingDisconnects()
             receivedFiles = ReceivedFileTransfer(senderName: senderName, files: files)
             addRecord(TransferRecord(
                 id: recordID,

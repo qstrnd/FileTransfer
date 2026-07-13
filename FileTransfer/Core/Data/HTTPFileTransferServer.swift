@@ -100,9 +100,9 @@ final class HTTPFileTransferServer: FileTransferServerGate {
             connection: connection,
             queue: queue,
             ledger: ledger,
-            onBodyStart: { [weak self] started in
+            onBodyStart: { [weak self] started, item, sender, firstOfTransfer in
                 Task { @MainActor [weak self] in
-                    self?.handlerBodyStarted(started)
+                    self?.handlerBodyStarted(started, item: item, sender: sender, firstOfTransfer: firstOfTransfer)
                 }
             },
             onFinish: { [weak self] finished, outcome in
@@ -118,12 +118,24 @@ final class HTTPFileTransferServer: FileTransferServerGate {
     /// Handlers whose body phase began (in-flight count was incremented for them).
     private var bodyStartedIDs: Set<ObjectIdentifier> = []
 
-    private func handlerBodyStarted(_ handler: HTTPConnectionHandler) {
+    private func handlerBodyStarted(
+        _ handler: HTTPConnectionHandler,
+        item: IncomingTransferItemInfo,
+        sender: TransferHTTPHeaders.Sender,
+        firstOfTransfer: Bool
+    ) {
         let id = ObjectIdentifier(handler)
         // A handler cancelled between its onBodyStart and this hop must not
         // re-increment after its finish already balanced the count.
         guard handlerRefs[id] != nil, bodyStartedIDs.insert(id).inserted else { return }
         setActiveReceptions(activeReceptionCount + 1)
+        // Announced at body start — not delivery — so a single large file
+        // shows up as an in-progress transfer from its first byte, matching
+        // MPC's resource-start semantics.
+        if firstOfTransfer {
+            let peer = Peer(displayName: sender.displayName, deviceID: sender.deviceID)
+            delegate?.serverDidStartReceiving(item: item, from: peer)
+        }
     }
 
     private func handlerFinished(_ handler: HTTPConnectionHandler, outcome: HTTPConnectionHandler.Outcome) {
@@ -134,11 +146,8 @@ final class HTTPFileTransferServer: FileTransferServerGate {
         }
 
         switch outcome {
-        case .delivered(let item, let sender, let url, let firstOfTransfer):
+        case .delivered(let item, let sender, let url):
             let peer = Peer(displayName: sender.displayName, deviceID: sender.deviceID)
-            if firstOfTransfer {
-                delegate?.serverDidStartReceiving(item: item, from: peer)
-            }
             delegate?.serverDidReceive(item: item, at: url, from: peer)
         case .duplicate(let item):
             Self.log.info("duplicate upload answered 409 for \(item.transferID, privacy: .public)/\(item.index)")

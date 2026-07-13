@@ -457,6 +457,79 @@ struct SearchViewModelTests {
         #expect(service.pingCalls.isEmpty)
     }
 
+    // MARK: - Transfer-aware disconnect deferral
+
+    @Test func peerDisconnected_duringIncomingTransfer_staysConnectedWithoutToast() {
+        let (vm, _, toastCenter) = makeVMWithToast()
+        let p = peer()
+        vm.peerDiscovered(p)
+        vm.peerStates[p] = .connecting
+        vm.peerConnected(p)
+
+        // A large upload is arriving from this peer when its MPC session
+        // drops (sender backgrounded and suspended; upload continues).
+        vm.mediaTransferStarted(transferID: "t1", totalCount: 3, from: p)
+        vm.peerDisconnected(p)
+
+        #expect(vm.peerStates[p] == .connected, "peer must stay connected while their transfer runs")
+        #expect(!toastCenter.shownIDs.contains("disconnectedPeer"))
+    }
+
+    @Test func deferredDisconnect_appliesOnceTransferCompletes() {
+        let (vm, _, toastCenter) = makeVMWithToast()
+        let p = peer()
+        vm.peerDiscovered(p)
+        vm.peerStates[p] = .connecting
+        vm.peerConnected(p)
+
+        vm.mediaTransferStarted(transferID: "t1", totalCount: 3, from: p)
+        vm.peerDisconnected(p)
+        #expect(vm.peerStates[p] == .connected)
+
+        // Transfer finishes → the deferred disconnect is applied normally.
+        vm.receivingMediaTransfer = nil
+        vm.flushPendingDisconnects()
+
+        #expect(vm.peerStates[p] != .connected)
+        #expect(toastCenter.shownIDs.contains("disconnectedPeer"))
+    }
+
+    @Test func checkKeepalive_stalePongDuringTransfer_doesNotDisconnect() {
+        let (vm, service) = makeVM()
+        let p = peer()
+        vm.peerDiscovered(p)
+        vm.peerStates[p] = .connecting
+        vm.peerConnected(p)          // records lastPongReceived[p.id] = .now
+        let T0 = Date.now
+
+        vm.mediaTransferStarted(transferID: "t1", totalCount: 3, from: p)
+        vm.checkKeepalive(now: T0.addingTimeInterval(16))   // stale, but transfer active
+
+        #expect(service.disconnectCalls.isEmpty, "stale pongs are expected while the peer's upload continues")
+        #expect(service.pingCalls.contains(p))
+
+        // Transfer done → policing resumes on the next tick.
+        vm.receivingMediaTransfer = nil
+        vm.checkKeepalive(now: T0.addingTimeInterval(17))
+        #expect(service.disconnectCalls.contains(p))
+    }
+
+    @Test func checkKeepalive_flushesDeferredDisconnect_afterTransferEnds() {
+        let (vm, _) = makeVM()
+        let p = peer()
+        vm.peerDiscovered(p)
+        vm.peerStates[p] = .connecting
+        vm.peerConnected(p)
+
+        vm.mediaTransferStarted(transferID: "t1", totalCount: 3, from: p)
+        vm.peerDisconnected(p)
+        vm.receivingMediaTransfer = nil
+
+        vm.checkKeepalive(now: .now)
+
+        #expect(vm.peerStates[p] != .connected, "keepalive tick must flush the deferred disconnect")
+    }
+
     @Test func checkKeepalive_noConnectedPeers_noop() {
         let (vm, service) = makeVM()
 

@@ -11,6 +11,12 @@ protocol HTTPTransferSending: AnyObject {
     /// Local identity stamped into upload headers; set when the session starts.
     func setLocalIdentity(deviceID: UUID, displayName: String)
 
+    /// True when no batches are in flight. Together with `onIdle` this lets
+    /// the facade defer session teardown until outgoing transfers finish.
+    var isIdle: Bool { get }
+    /// Fired once each time the last in-flight batch reaches a terminal state.
+    var onIdle: (@MainActor () -> Void)? { get set }
+
     /// Starts the batch and synchronously returns one `Progress` per file
     /// (the same objects the existing send UI polls, surviving retries and
     /// transport fallback).

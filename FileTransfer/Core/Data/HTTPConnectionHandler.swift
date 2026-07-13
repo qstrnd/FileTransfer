@@ -43,7 +43,7 @@ nonisolated final class HTTPConnectionHandler: @unchecked Sendable {
 
     enum Outcome: Sendable {
         /// Item verified and stored; deliver to the app.
-        case delivered(IncomingTransferItemInfo, TransferHTTPHeaders.Sender, URL, firstOfTransfer: Bool)
+        case delivered(IncomingTransferItemInfo, TransferHTTPHeaders.Sender, URL)
         /// Head parsed but item already fully received (sender retry) — answered 409.
         case duplicate(IncomingTransferItemInfo)
         /// Anything that ended without a stored item (malformed, checksum, I/O, timeout, cancel).
@@ -58,9 +58,14 @@ nonisolated final class HTTPConnectionHandler: @unchecked Sendable {
     private let queue: DispatchQueue
     private let ledger: TransferReceptionLedger
     private let onFinish: @Sendable (HTTPConnectionHandler, Outcome) -> Void
-    /// Fired once, right after the head parses and the item is accepted, so
-    /// the server can bump its in-flight count before body bytes stream in.
-    private let onBodyStart: @Sendable (HTTPConnectionHandler) -> Void
+    /// Fired once, right after the head parses and the item is accepted —
+    /// before body bytes stream in — so the server can bump its in-flight
+    /// count and announce the transfer's start as soon as it begins (matching
+    /// MPC's resource-start semantics; vital for a single large file whose
+    /// only item would otherwise announce nothing until fully received).
+    /// `firstOfTransfer` is true for the first announcing item of a
+    /// transferID (LP companion videos never claim it, matching MPC).
+    private let onBodyStart: @Sendable (HTTPConnectionHandler, IncomingTransferItemInfo, TransferHTTPHeaders.Sender, _ firstOfTransfer: Bool) -> Void
 
     // Confined to `queue` (all connection callbacks and timers run there).
     private var headBuffer = Data()
@@ -80,7 +85,7 @@ nonisolated final class HTTPConnectionHandler: @unchecked Sendable {
         connection: NWConnection,
         queue: DispatchQueue,
         ledger: TransferReceptionLedger,
-        onBodyStart: @escaping @Sendable (HTTPConnectionHandler) -> Void,
+        onBodyStart: @escaping @Sendable (HTTPConnectionHandler, IncomingTransferItemInfo, TransferHTTPHeaders.Sender, _ firstOfTransfer: Bool) -> Void,
         onFinish: @escaping @Sendable (HTTPConnectionHandler, Outcome) -> Void
     ) {
         self.connection = connection
@@ -189,7 +194,12 @@ nonisolated final class HTTPConnectionHandler: @unchecked Sendable {
         destinationURL = dest
         fileHandle = handle
         bodyStarted = true
-        onBodyStart(self)
+        // Announce the transfer as soon as its first item starts arriving.
+        // LP companion videos never announce (matching MPC), so they must not
+        // consume the transfer's one "first item" flag.
+        let isFirst = decoded.item.kind != .livePhotoVideo
+            && ledger.markStarted(transferID: decoded.item.transferID)
+        onBodyStart(self, decoded.item, decoded.sender, isFirst)
 
         Self.log.info("receiving \(itemKey, privacy: .public) \(length) bytes")
         if !bodyPrefix.isEmpty {
@@ -256,12 +266,8 @@ nonisolated final class HTTPConnectionHandler: @unchecked Sendable {
         }
         let itemKey = "\(item.transferID)/\(item.index)/\(item.kind.rawValue)"
         ledger.markCompleted(itemKey: itemKey)
-        // LP companion videos never announce a transfer start (matching the MPC
-        // path) — so they must not consume the transfer's one "first item" flag,
-        // or a video finishing first would swallow the announcement entirely.
-        let isFirst = item.kind != .livePhotoVideo && ledger.markStarted(transferID: item.transferID)
         Self.log.info("delivered \(itemKey, privacy: .public)")
-        finish(.delivered(item, sender, destinationURL, firstOfTransfer: isFirst), response: .ok)
+        finish(.delivered(item, sender, destinationURL), response: .ok)
     }
 
     // MARK: - Finish / response
