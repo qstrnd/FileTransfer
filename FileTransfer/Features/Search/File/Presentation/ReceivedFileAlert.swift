@@ -19,19 +19,25 @@ struct ReceivedFileAlert: View {
                 FilePreviewStrip(files: transfer.files, gate: thumbnailGate)
                     .frame(height: FilePreviewStrip.height(for: transfer.files.count))
             },
-            actions: { transfer in
+            actionRows: { transfer in
                 [
-                    ReceivedAlertAction(title: "Save to Files", systemImage: "folder") {
-                        onSaveToFiles(transfer.files)
-                        onDismiss()
-                    },
-                    ReceivedAlertAction(title: "Share", systemImage: "square.and.arrow.up") {
-                        onShare(transfer.files)
-                        onDismiss()
-                    },
-                    ReceivedAlertAction(title: "Close", systemImage: "xmark", isSecondary: true) {
-                        onDismiss()
-                    },
+                    [
+                        ReceivedAlertAction(title: "Save to Files") {
+                            onSaveToFiles(transfer.files)
+                            onDismiss()
+                        },
+                    ],
+                    [
+                        ReceivedAlertAction(title: "Share") {
+                            onShare(transfer.files)
+                            onDismiss()
+                        },
+                    ],
+                    [
+                        ReceivedAlertAction(title: "Close", isSecondary: true) {
+                            onDismiss()
+                        },
+                    ],
                 ]
             }
         )

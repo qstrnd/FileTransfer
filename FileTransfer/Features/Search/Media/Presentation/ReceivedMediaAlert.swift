@@ -21,22 +21,28 @@ struct ReceivedMediaAlert: View {
                 recordID: { $0.recordID },
                 onDeleteRecord: onDeleteRecord,
                 content: { mediaSection(for: $0.items) },
-                actions: { transfer in
+                actionRows: { transfer in
                     [
-                        ReceivedAlertAction(title: "Save to Gallery", systemImage: "square.and.arrow.down") {
-                            saveToGallery(transfer.items)
-                        },
-                        ReceivedAlertAction(title: "Save to Files", systemImage: "folder") {
-                            onSaveToFiles(transfer.items)
-                            onDismiss()
-                        },
-                        ReceivedAlertAction(title: "Share", systemImage: "square.and.arrow.up") {
-                            onShare(transfer.items)
-                            onDismiss()
-                        },
-                        ReceivedAlertAction(title: "Close", systemImage: "xmark", isSecondary: true) {
-                            onDismiss()
-                        },
+                        [
+                            ReceivedAlertAction(title: "Save to Gallery") {
+                                saveToGallery(transfer.items)
+                            },
+                            ReceivedAlertAction(title: "Save to Files") {
+                                onSaveToFiles(transfer.items)
+                                onDismiss()
+                            },
+                        ],
+                        [
+                            ReceivedAlertAction(title: "Share") {
+                                onShare(transfer.items)
+                                onDismiss()
+                            },
+                        ],
+                        [
+                            ReceivedAlertAction(title: "Close", isSecondary: true) {
+                                onDismiss()
+                            },
+                        ],
                     ]
                 }
             )

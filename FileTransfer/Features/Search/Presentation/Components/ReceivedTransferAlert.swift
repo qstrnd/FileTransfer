@@ -4,7 +4,6 @@ import SwiftUI
 struct ReceivedAlertAction: Identifiable {
     let id = UUID()
     let title: String
-    let systemImage: String
     /// Rendered in a muted style (used for the neutral "Close" action).
     var isSecondary = false
     let action: () -> Void
@@ -29,7 +28,10 @@ struct ReceivedTransferAlert<Transfer: Identifiable, Content: View>: View {
     let recordID: (Transfer) -> UUID?
     let onDeleteRecord: (UUID) -> Void
     @ViewBuilder let content: (Transfer) -> Content
-    let actions: (Transfer) -> [ReceivedAlertAction]
+    /// Action buttons grouped into rows; each row lays its buttons out as
+    /// equal-width capsules side by side (e.g. `[[Save to Gallery, Save to
+    /// Files], [Share], [Close]]`).
+    let actionRows: (Transfer) -> [[ReceivedAlertAction]]
 
     @AppStorage("ft.keepReceivedInHistory") private var keepInHistory = true
 
@@ -81,7 +83,7 @@ struct ReceivedTransferAlert<Transfer: Identifiable, Content: View>: View {
 
             Divider()
 
-            actionList(for: transfer)
+            actionButtons(for: transfer)
         }
         .glassEffect(in: RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
         .frame(maxWidth: 400)
@@ -102,29 +104,31 @@ struct ReceivedTransferAlert<Transfer: Identifiable, Content: View>: View {
 
     // MARK: - Actions
 
-    private func actionList(for transfer: Transfer) -> some View {
-        let acts = actions(transfer)
-        return VStack(spacing: 0) {
-            ForEach(Array(acts.enumerated()), id: \.element.id) { index, action in
-                Button {
-                    // Persisted intent applies to this transfer too: closing
-                    // the alert with the toggle off removes the just-created
-                    // history record.
-                    if !keepInHistory, let id = recordID(transfer) { onDeleteRecord(id) }
-                    action.action()
-                } label: {
-                    Label(action.title, systemImage: action.systemImage)
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(action.isSecondary ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.accentColor))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 14)
-                        .padding(.leading, 16)
-                        .contentShape(Rectangle())
+    private func actionButtons(for transfer: Transfer) -> some View {
+        let rows = actionRows(transfer)
+        return VStack(spacing: 10) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                HStack(spacing: 10) {
+                    ForEach(row) { action in
+                        Button {
+                            // Persisted intent applies to this transfer too:
+                            // closing with the toggle off removes the record.
+                            if !keepInHistory, let id = recordID(transfer) { onDeleteRecord(id) }
+                            action.action()
+                        } label: {
+                            Text(action.title)
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(action.isSecondary ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.accentColor))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(.quaternary, in: Capsule())
+                                .contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
-                if index < acts.count - 1 { Divider() }
             }
         }
-        .padding(.horizontal, 4)
-        .padding(.vertical, 2)
+        .padding(16)
     }
 }

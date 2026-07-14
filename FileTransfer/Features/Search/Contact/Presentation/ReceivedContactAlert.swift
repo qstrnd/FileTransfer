@@ -20,15 +20,19 @@ struct ReceivedContactAlert: View {
             recordID: { $0.recordID },
             onDeleteRecord: onDeleteRecord,
             content: { contactSection(for: $0.contacts) },
-            actions: { transfer in
+            actionRows: { transfer in
                 [
-                    ReceivedAlertAction(title: "Share", systemImage: "square.and.arrow.up") {
-                        onShare(transfer.vCardData)
-                        onDismiss()
-                    },
-                    ReceivedAlertAction(title: "Close", systemImage: "xmark", isSecondary: true) {
-                        onDismiss()
-                    },
+                    [
+                        ReceivedAlertAction(title: "Share") {
+                            onShare(transfer.vCardData)
+                            onDismiss()
+                        },
+                    ],
+                    [
+                        ReceivedAlertAction(title: "Close", isSecondary: true) {
+                            onDismiss()
+                        },
+                    ],
                 ]
             }
         )
