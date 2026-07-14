@@ -16,4 +16,9 @@ nonisolated enum TransferFeatureFlags {
     /// regular foreground session, stop() tears the server down immediately,
     /// and no activities are requested.
     static let backgroundTransferAndLiveActivity = true
+
+    /// Contact sharing (the "Contact" share action). SUSPENDED: the feature is
+    /// no longer supported — its entry point is hidden while this is off. Do
+    /// not build on it or reintroduce contact-send UI without re-enabling here.
+    static let contactSharing = false
 }

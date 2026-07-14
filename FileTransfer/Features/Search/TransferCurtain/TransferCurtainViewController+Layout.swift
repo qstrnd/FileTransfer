@@ -106,7 +106,12 @@ extension TransferCurtainViewController {
         fileButton.addTarget(self,    action: #selector(fileTapped),    for: .touchUpInside)
         contactButton.addTarget(self, action: #selector(contactTapped), for: .touchUpInside)
 
-        let actionsRow = UIStackView(arrangedSubviews: [contactButton, fileButton, photoButton, textButton])
+        // Contact sharing is suspended (see TransferFeatureFlags); omit its
+        // button entirely when off so the remaining actions fill the row.
+        let actionButtons: [UIView] = TransferFeatureFlags.contactSharing
+            ? [contactButton, fileButton, photoButton, textButton]
+            : [fileButton, photoButton, textButton]
+        let actionsRow = UIStackView(arrangedSubviews: actionButtons)
         actionsRow.axis = .horizontal
         actionsRow.distribution = .fillEqually
         actionsRow.translatesAutoresizingMaskIntoConstraints = false

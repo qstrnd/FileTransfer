@@ -290,6 +290,16 @@ New UIKit view controller (complex gesture/layout)?
 
 ---
 
+## Suspended features
+
+Some capabilities are gated off in `Core/Domain/TransferFeatureFlags.swift` and are **not currently supported**. Do not extend, "fix", or build new work on top of them, and do not re-enable a flag as a side effect of unrelated work.
+
+- **Contact sharing** (`contactSharing`, off) — sending contacts is suspended. The "Contact" share action is hidden while the flag is off. Treat the contact send/receive path as frozen: no new features, and prefer not to reference it from new code.
+
+When a flag is off, keep its code paths intact (so it can be revived) but inert. New entry points for a suspended feature must stay behind its flag.
+
+---
+
 ## Git
 
 Commit after each self-contained, green-building change. Never commit a broken build. Commit messages state *why*, not *what*.
