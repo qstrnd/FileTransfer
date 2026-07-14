@@ -123,11 +123,11 @@ struct ReceivedTransferAlert<Transfer: Identifiable, Content: View>: View {
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.8)
                                 .frame(maxWidth: .infinity)
-                                .padding(.vertical, 6)
+                                .padding(.vertical, 14)
+                                .background(.regularMaterial, in: Capsule())
+                                .contentShape(Capsule())
                         }
-                        .buttonStyle(.glass)
-                        .controlSize(.large)
-                        .buttonBorderShape(.capsule)
+                        .buttonStyle(.plain)
                     }
                 }
             }
