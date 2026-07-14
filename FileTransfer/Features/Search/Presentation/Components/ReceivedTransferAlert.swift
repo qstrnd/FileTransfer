@@ -116,8 +116,10 @@ struct ReceivedTransferAlert<Transfer: Identifiable, Content: View>: View {
                     Label(action.title, systemImage: action.systemImage)
                         .font(.body.weight(.semibold))
                         .foregroundStyle(action.isSecondary ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.accentColor))
-                        .frame(maxWidth: .infinity)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 14)
+                        .padding(.leading, 16)
+                        .contentShape(Rectangle())
                 }
                 if index < acts.count - 1 { Divider() }
             }
