@@ -49,11 +49,18 @@ struct ReceivingToastCapsule: View {
 
     var body: some View {
         ToastCapsuleShell {
-            HStack(spacing: 8) {
-                ProgressView()
-                    .scaleEffect(0.8)
-                Text("\(progress.senderName) · \(progress.receivedCount) of \(progress.totalCount)")
-                    .font(.subheadline.weight(.semibold))
+            VStack(spacing: 3) {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text("\(progress.senderName) · \(progress.receivedCount) of \(progress.totalCount)")
+                        .font(.subheadline.weight(.semibold))
+                }
+                // The receiver runs a foreground server without background
+                // continuation — leaving the app cancels the reception.
+                if !TransferFeatureFlags.backgroundTransferAndLiveActivity {
+                    KeepAppOpenHint(compact: true)
+                }
             }
         }
     }

@@ -15,7 +15,7 @@ nonisolated enum TransferFeatureFlags {
     /// progress on the lock screen / Dynamic Island. When off, uploads use a
     /// regular foreground session, stop() tears the server down immediately,
     /// and no activities are requested.
-    static let backgroundTransferAndLiveActivity = true
+    static let backgroundTransferAndLiveActivity = false
 
     /// Contact sharing (the "Contact" share action). SUSPENDED: the feature is
     /// no longer supported — its entry point is hidden while this is off. Do

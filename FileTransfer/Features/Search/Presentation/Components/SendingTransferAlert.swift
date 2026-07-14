@@ -92,6 +92,12 @@ struct SendingTransferAlert: View {
                 ProgressView(value: transfer.progress)
                     .tint(.blue)
                     .padding(.top, 4)
+                // Without background transfer, suspending the app cancels the
+                // upload — tell the user to keep it open until it's done.
+                if !TransferFeatureFlags.backgroundTransferAndLiveActivity {
+                    KeepAppOpenHint()
+                        .padding(.top, 2)
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(.top, 32)
