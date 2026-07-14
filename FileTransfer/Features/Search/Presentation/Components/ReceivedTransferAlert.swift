@@ -95,9 +95,10 @@ struct ReceivedTransferAlert<Transfer: Identifiable, Content: View>: View {
     private var keepToggle: some View {
         Toggle(isOn: $keepInHistory) {
             Label("Keep in Transfer History", systemImage: "clock.arrow.circlepath")
-                .font(.subheadline.weight(.medium))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
         }
-        .tint(.accentColor)
+        .tint(.green)
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
     }
@@ -118,13 +119,15 @@ struct ReceivedTransferAlert<Transfer: Identifiable, Content: View>: View {
                         } label: {
                             Text(action.title)
                                 .font(.body.weight(.semibold))
-                                .foregroundStyle(action.isSecondary ? AnyShapeStyle(.secondary) : AnyShapeStyle(Color.accentColor))
+                                .foregroundStyle(action.isSecondary ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                                 .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
-                                .background(.quaternary, in: Capsule())
-                                .contentShape(Capsule())
+                                .padding(.vertical, 6)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.glass)
+                        .controlSize(.large)
+                        .buttonBorderShape(.capsule)
                     }
                 }
             }
