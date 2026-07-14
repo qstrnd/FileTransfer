@@ -56,15 +56,25 @@ struct PinnedWindow<Content: View>: UIViewRepresentable {
     final class Coordinator {
         private let parent: PinnedWindow<Content>
         private var window: UIWindow?
-        private var host: UIHostingController<Content>?
+        private var host: UIHostingController<ModalRoot<Content>>?
         private var pendingHide: DispatchWorkItem?
 
         init(parent: PinnedWindow<Content>) { self.parent = parent }
 
+        private func root(_ content: Content) -> ModalRoot<Content> {
+            // When interactive, wrap the content in a full-screen touch sink so
+            // the hosting window claims every touch — nothing in the windows
+            // below can react while the alert is up, regardless of whether the
+            // content itself covers the whole screen. This makes each alert
+            // truly modal at the container level rather than relying on every
+            // alert to draw its own full-bleed blocking scrim.
+            ModalRoot(content: content, blocksBackground: parent.isInteractive)
+        }
+
         func update(content: Content, isVisible: Bool, anchoredTo view: UIView) {
             if let host {
                 // Window already exists — just update the hosted view.
-                host.rootView = content
+                host.rootView = root(content)
 
                 if isVisible {
                     pendingHide?.cancel()
@@ -82,7 +92,7 @@ struct PinnedWindow<Content: View>: UIViewRepresentable {
 
             guard isVisible, let scene = view.window?.windowScene else { return }
 
-            let newHost = UIHostingController(rootView: content)
+            let newHost = UIHostingController(rootView: root(content))
             newHost.view.backgroundColor = .clear
 
             let newWindow = UIWindow(windowScene: scene)
@@ -115,6 +125,29 @@ struct PinnedWindow<Content: View>: UIViewRepresentable {
             }
             pendingHide = item
             DispatchQueue.main.asyncAfter(deadline: .now() + parent.hideDelay, execute: item)
+        }
+    }
+}
+
+// MARK: - Modal root
+
+/// Wraps a `PinnedWindow`'s content with a full-screen touch sink so an
+/// interactive alert window absorbs every touch across the whole screen.
+/// The sink sits behind the content, so the content's own buttons still work;
+/// it only catches touches the content leaves unclaimed, preventing them from
+/// falling through to the app windows underneath.
+private struct ModalRoot<Content: View>: View {
+    let content: Content
+    let blocksBackground: Bool
+
+    var body: some View {
+        ZStack {
+            if blocksBackground {
+                Color.clear
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+            }
+            content
         }
     }
 }
