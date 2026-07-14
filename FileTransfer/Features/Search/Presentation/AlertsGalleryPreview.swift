@@ -103,6 +103,7 @@ Let me know what works and I'll send a calendar invite.
             transfer: ReceivedMediaTransfer(senderName: "🐨 Koala", items: items),
             thumbnailGate: GalleryMediaThumbnailGate(),
             onDismiss: {},
+            onDeleteRecord: { _ in },
             onSaveToGallery: { _ in true },
             onSaveToFiles: { _ in },
             onShare: { _ in }
@@ -124,6 +125,7 @@ Let me know what works and I'll send a calendar invite.
             transfer: ReceivedMediaTransfer(senderName: "🦔 Hedgehog", items: items),
             thumbnailGate: GalleryMediaThumbnailGate(),
             onDismiss: {},
+            onDeleteRecord: { _ in },
             onSaveToGallery: { _ in true },
             onSaveToFiles: { _ in },
             onShare: { _ in }
@@ -141,6 +143,7 @@ Let me know what works and I'll send a calendar invite.
             transfer: ReceivedFileTransfer(senderName: "🦁 Lion", files: files),
             thumbnailGate: GalleryDocumentThumbnailGate(),
             onDismiss: {},
+            onDeleteRecord: { _ in },
             onSaveToFiles: { _ in },
             onShare: { _ in }
         )
@@ -163,6 +166,7 @@ Let me know what works and I'll send a calendar invite.
             transfer: ReceivedFileTransfer(senderName: "🦁 Lion", files: files),
             thumbnailGate: GalleryDocumentThumbnailGate(),
             onDismiss: {},
+            onDeleteRecord: { _ in },
             onSaveToFiles: { _ in },
             onShare: { _ in }
         )
@@ -182,7 +186,7 @@ Let me know what works and I'll send a calendar invite.
     )
     ZStack {
         Color(.systemGroupedBackground).ignoresSafeArea()
-        ReceivedContactAlert(transfer: transfer, onDismiss: {}, onShare: { _ in })
+        ReceivedContactAlert(transfer: transfer, onDismiss: {}, onDeleteRecord: { _ in }, onShare: { _ in })
     }
 }
 
@@ -202,7 +206,7 @@ Let me know what works and I'll send a calendar invite.
     )
     ZStack {
         Color(.systemGroupedBackground).ignoresSafeArea()
-        ReceivedContactAlert(transfer: transfer, onDismiss: {}, onShare: { _ in })
+        ReceivedContactAlert(transfer: transfer, onDismiss: {}, onDeleteRecord: { _ in }, onShare: { _ in })
     }
 }
 

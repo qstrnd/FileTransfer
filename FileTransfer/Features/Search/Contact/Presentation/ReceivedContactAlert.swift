@@ -4,9 +4,8 @@ import UIKit
 struct ReceivedContactAlert: View {
     let transfer: ReceivedContactTransfer?
     let onDismiss: () -> Void
+    let onDeleteRecord: (UUID) -> Void
     let onShare: (Data) -> Void
-
-    private let cardCornerRadius: CGFloat = 20
 
     private func initials(for name: String) -> String {
         name.split(separator: " ").prefix(2)
@@ -14,74 +13,25 @@ struct ReceivedContactAlert: View {
     }
 
     var body: some View {
-        ZStack {
-            if transfer != nil {
-                Color.black.opacity(0.4)
-                    .ignoresSafeArea()
-                    .allowsHitTesting(true)
-                    .transition(.opacity)
+        ReceivedTransferAlert(
+            transfer: transfer,
+            senderName: { $0.senderName },
+            subtitle: { $0.contacts.count == 1 ? "sent you a contact" : "sent you \($0.contacts.count) contacts" },
+            recordID: { $0.recordID },
+            onDeleteRecord: onDeleteRecord,
+            content: { contactSection(for: $0.contacts) },
+            actions: { transfer in
+                [
+                    ReceivedAlertAction(title: "Share", systemImage: "square.and.arrow.up") {
+                        onShare(transfer.vCardData)
+                        onDismiss()
+                    },
+                    ReceivedAlertAction(title: "Close", systemImage: "xmark", isSecondary: true) {
+                        onDismiss()
+                    },
+                ]
             }
-            if let transfer {
-                alertCard(for: transfer)
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
-            }
-        }
-        .animation(.spring(duration: 0.3), value: transfer?.id)
-    }
-
-    // MARK: - Card
-
-    private func alertCard(for transfer: ReceivedContactTransfer) -> some View {
-        let (emoji, name) = Peer.parseDisplayName(transfer.senderName)
-        let contactWord = transfer.contacts.count == 1 ? "a contact" : "\(transfer.contacts.count) contacts"
-
-        return VStack(spacing: 0) {
-            VStack(spacing: 6) {
-                Text(emoji)
-                    .font(.system(size: 44))
-                Text(name)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                Text("sent you \(contactWord)")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.top, 24)
-            .padding(.horizontal, 20)
-            .padding(.bottom, 16)
-
-            Divider()
-
-            contactSection(for: transfer.contacts)
-
-            Divider()
-
-            VStack(spacing: 0) {
-                Button {
-                    onShare(transfer.vCardData)
-                    onDismiss()
-                } label: {
-                    Label("Share…", systemImage: "square.and.arrow.up")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                }
-
-                Divider()
-
-                Button(action: onDismiss) {
-                    Text("Dismiss")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                }
-            }
-            .padding(.horizontal, 4)
-            .padding(.vertical, 2)
-        }
-        .glassEffect(in: RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
-        .frame(maxWidth: 400)
-        .padding(.horizontal, 24)
+        )
     }
 
     // MARK: - Contact list
@@ -169,7 +119,7 @@ private func previewPhoto(_ color: UIColor) -> Data {
     )
     ZStack {
         Color(.systemGroupedBackground).ignoresSafeArea()
-        ReceivedContactAlert(transfer: transfer, onDismiss: {}, onShare: { _ in })
+        ReceivedContactAlert(transfer: transfer, onDismiss: {}, onDeleteRecord: { _ in }, onShare: { _ in })
     }
 }
 
@@ -185,29 +135,14 @@ private func previewPhoto(_ color: UIColor) -> Data {
     )
     ZStack {
         Color(.systemGroupedBackground).ignoresSafeArea()
-        ReceivedContactAlert(transfer: transfer, onDismiss: {}, onShare: { _ in })
-    }
-}
-
-#Preview("Received — with photo") {
-    let transfer = ReceivedContactTransfer(
-        senderName: "🦊 Fox",
-        contacts: [
-            ContactItem(displayName: "Jane Smith", phoneNumbers: ["+1 555 123 4567"], emailAddresses: [], photoData: previewPhoto(.systemOrange)),
-            ContactItem(displayName: "No Photo Guy", phoneNumbers: ["+1 555 999 0000"], emailAddresses: []),
-        ],
-        vCardData: Data()
-    )
-    ZStack {
-        Color(.systemGroupedBackground).ignoresSafeArea()
-        ReceivedContactAlert(transfer: transfer, onDismiss: {}, onShare: { _ in })
+        ReceivedContactAlert(transfer: transfer, onDismiss: {}, onDeleteRecord: { _ in }, onShare: { _ in })
     }
 }
 
 #Preview("Hidden") {
     ZStack {
         Color(.systemGroupedBackground).ignoresSafeArea()
-        ReceivedContactAlert(transfer: nil, onDismiss: {}, onShare: { _ in })
+        ReceivedContactAlert(transfer: nil, onDismiss: {}, onDeleteRecord: { _ in }, onShare: { _ in })
     }
 }
 #endif

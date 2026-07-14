@@ -646,16 +646,18 @@ extension SearchViewModel: PeerSessionEvents {
         let contactInfos = contactItems.map {
             ContactInfo(name: $0.displayName, phone: $0.phoneNumbers.first, photoData: $0.photoData)
         }
-        addRecord(TransferRecord(
+        let record = TransferRecord(
             peerEmoji: emoji, peerName: name,
             direction: .received, type: .contact, detail: detail,
             contacts: contactInfos
-        ))
+        )
+        addRecord(record)
 
         receivedContact = ReceivedContactTransfer(
             senderName: peer.displayName,
             contacts: contactItems,
-            vCardData: data
+            vCardData: data,
+            recordID: record.id
         )
     }
 
@@ -693,7 +695,7 @@ extension SearchViewModel: PeerSessionEvents {
             try? await Task.sleep(for: .seconds(1.2))
             receivingMediaTransfer = nil
             flushPendingDisconnects()
-            receivedMedia = ReceivedMediaTransfer(senderName: senderName, items: items)
+            receivedMedia = ReceivedMediaTransfer(senderName: senderName, items: items, recordID: recordID)
             addRecord(TransferRecord(
                 id: recordID,
                 peerEmoji: emoji,
@@ -745,7 +747,7 @@ extension SearchViewModel: PeerSessionEvents {
             try? await Task.sleep(for: .seconds(1.2))
             receivingFileTransfer = nil
             flushPendingDisconnects()
-            receivedFiles = ReceivedFileTransfer(senderName: senderName, files: files)
+            receivedFiles = ReceivedFileTransfer(senderName: senderName, files: files, recordID: recordID)
             addRecord(TransferRecord(
                 id: recordID,
                 peerEmoji: emoji,

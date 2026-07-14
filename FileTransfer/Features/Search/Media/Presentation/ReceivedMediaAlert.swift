@@ -5,26 +5,42 @@ struct ReceivedMediaAlert: View {
     let transfer: ReceivedMediaTransfer?
     let thumbnailGate: any ThumbnailGate
     let onDismiss: () -> Void
+    let onDeleteRecord: (UUID) -> Void
     let onSaveToGallery: ([ReceivedMediaItem]) async -> Bool
     let onSaveToFiles: ([ReceivedMediaItem]) -> Void
     let onShare: ([ReceivedMediaItem]) -> Void
 
     @State private var showSavedToast = false
 
-    private let cardCornerRadius: CGFloat = 20
-
     var body: some View {
         ZStack {
-            if transfer != nil {
-                Color.black.opacity(0.4)
-                    .ignoresSafeArea()
-                    .allowsHitTesting(true)
-                    .transition(.opacity)
-            }
-            if let transfer {
-                alertCard(for: transfer)
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
-            }
+            ReceivedTransferAlert(
+                transfer: transfer,
+                senderName: { $0.senderName },
+                subtitle: { _ in "sent you media" },
+                recordID: { $0.recordID },
+                onDeleteRecord: onDeleteRecord,
+                content: { mediaSection(for: $0.items) },
+                actions: { transfer in
+                    [
+                        ReceivedAlertAction(title: "Save to Gallery", systemImage: "square.and.arrow.down") {
+                            saveToGallery(transfer.items)
+                        },
+                        ReceivedAlertAction(title: "Save to Files", systemImage: "folder") {
+                            onSaveToFiles(transfer.items)
+                            onDismiss()
+                        },
+                        ReceivedAlertAction(title: "Share", systemImage: "square.and.arrow.up") {
+                            onShare(transfer.items)
+                            onDismiss()
+                        },
+                        ReceivedAlertAction(title: "Close", systemImage: "xmark", isSecondary: true) {
+                            onDismiss()
+                        },
+                    ]
+                }
+            )
+
             if showSavedToast {
                 savedToast
                     .transition(.move(edge: .top).combined(with: .opacity))
@@ -33,86 +49,8 @@ struct ReceivedMediaAlert: View {
                     .allowsHitTesting(false)
             }
         }
-        .animation(.spring(duration: 0.3), value: transfer?.id)
         .animation(.spring(duration: 0.35), value: showSavedToast)
         .onChange(of: transfer?.id) { _, newID in if newID != nil { showSavedToast = false } }
-    }
-
-    // MARK: - Card
-
-    private func alertCard(for transfer: ReceivedMediaTransfer) -> some View {
-        let (emoji, name) = Peer.parseDisplayName(transfer.senderName)
-
-        return VStack(spacing: 0) {
-            VStack(spacing: 6) {
-                Text(emoji)
-                    .font(.system(size: 44))
-                Text(name)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                Text("sent you media")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.top, 24)
-            .padding(.horizontal, 20)
-            .padding(.bottom, 16)
-
-            Divider()
-
-            mediaSection(for: transfer.items)
-
-            Divider()
-
-            VStack(spacing: 0) {
-                Button {
-                    saveToGallery(transfer.items)
-                } label: {
-                    Text("Save to Gallery")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                }
-
-                Divider()
-
-                Button {
-                    onSaveToFiles(transfer.items)
-                    onDismiss()
-                } label: {
-                    Text("Save to Files")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                }
-
-                Divider()
-
-                Button {
-                    onShare(transfer.items)
-                    onDismiss()
-                } label: {
-                    Text("Share…")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                }
-
-                Divider()
-
-                Button(action: onDismiss) {
-                    Text("Dismiss")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                }
-            }
-            .padding(.horizontal, 4)
-            .padding(.vertical, 2)
-        }
-        .glassEffect(in: RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
-        .frame(maxWidth: 400)
-        .padding(.horizontal, 24)
     }
 
     // MARK: - Media section
