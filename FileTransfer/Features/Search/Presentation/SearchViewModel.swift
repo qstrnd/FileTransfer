@@ -3,6 +3,7 @@ import Foundation
 import Observation
 import OSLog
 import SwiftUI
+import UIKit
 
 private let log = Logger(subsystem: "com.qstrnd.FileTransfer", category: "Search")
 
@@ -82,6 +83,11 @@ final class SearchViewModel {
     /// They stay visibly connected until the transfer finishes, then the
     /// deferred disconnect is applied by `flushPendingDisconnects`.
     private var pendingDisconnects: [Peer.ID: Peer] = [:]
+    /// Background-grace timer: when background transfer is off and a send is in
+    /// flight, backgrounding holds the connection for 5s (see `handleBackground`)
+    /// instead of tearing it down, so a quick return keeps the transfer alive.
+    private var backgroundGraceTimer: Task<Void, Never>?
+    private var backgroundGraceTaskID: UIBackgroundTaskIdentifier = .invalid
 
     init(
         emoji: String,
@@ -136,18 +142,41 @@ final class SearchViewModel {
     func stop() {
         log.info("stop")
         stopKeepalive()
+        cancelBackgroundGrace()
         service.delegate = nil
         service.stop()
     }
 
     /// Called the moment the app enters the background.
-    /// Stops the MPC service so peers receive a `.notConnected` callback immediately
-    /// rather than waiting for the session to time out on its own.
+    /// Normally stops the MPC service so peers receive a `.notConnected`
+    /// callback immediately rather than waiting for the session to time out.
+    ///
+    /// Exception — when background transfer is off and a send is in flight:
+    /// the transfer only runs while the app is foreground, so instead of
+    /// killing it the instant the user leaves, the connection is held for a
+    /// 5-second grace under a background task. Returning within 5s resumes it
+    /// (see `handleForeground`); otherwise the grace expires and the
+    /// connection breaks like a normal background stop.
     func handleBackground() {
-        log.info("handleBackground — stopping service")
         stopKeepalive()
-        // Clear state first so the .notConnected callbacks that service.stop() triggers
-        // find an already-clean peerStates and don't show spurious local toasts.
+        if !TransferFeatureFlags.backgroundTransferAndLiveActivity, hasActiveOutgoingTransfer {
+            beginBackgroundGrace()
+            return
+        }
+        log.info("handleBackground — stopping service")
+        performBackgroundStop()
+    }
+
+    /// True while an outgoing media/file send is still in progress.
+    private var hasActiveOutgoingTransfer: Bool {
+        if let media = outgoingMediaTransfer, !media.isComplete { return true }
+        if let file = outgoingFileTransfer, !file.isComplete { return true }
+        return false
+    }
+
+    private func performBackgroundStop() {
+        // Clear state first so the .notConnected callbacks that service.stop()
+        // triggers find an already-clean peerStates and don't show spurious toasts.
         withAnimation {
             peerStates = [:]
             discoveredPeers = []
@@ -158,10 +187,57 @@ final class SearchViewModel {
         service.stop()
     }
 
+    // MARK: - Background grace
+
+    private func beginBackgroundGrace() {
+        log.info("handleBackground — holding connection 5s (background sending off, send in flight)")
+        endBackgroundGraceTask()
+        backgroundGraceTaskID = UIApplication.shared.beginBackgroundTask(withName: "ft.sendGrace") { [weak self] in
+            self?.expireBackgroundGrace()
+        }
+        backgroundGraceTimer = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled else { return }
+            self?.expireBackgroundGrace()
+        }
+    }
+
+    /// Grace ran out (still backgrounded after 5s, or iOS reclaimed the task):
+    /// break the connection like a normal background stop.
+    private func expireBackgroundGrace() {
+        guard backgroundGraceTimer != nil else { return }
+        log.info("background grace expired — breaking connection")
+        backgroundGraceTimer?.cancel()
+        backgroundGraceTimer = nil
+        performBackgroundStop()
+        endBackgroundGraceTask()
+    }
+
+    /// Cancels a pending grace without breaking the connection (used on resume).
+    private func cancelBackgroundGrace() {
+        backgroundGraceTimer?.cancel()
+        backgroundGraceTimer = nil
+        endBackgroundGraceTask()
+    }
+
+    private func endBackgroundGraceTask() {
+        guard backgroundGraceTaskID != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(backgroundGraceTaskID)
+        backgroundGraceTaskID = .invalid
+    }
+
     /// Called when the app returns to the foreground. Tears down the current
     /// MPC session (disconnecting all peers) and restarts advertising/browsing
     /// so discovery begins fresh without stale peer state.
     func handleForeground() {
+        // Returned within the background grace: the connection was never torn
+        // down, so resume the in-flight transfer instead of resetting.
+        if backgroundGraceTimer != nil {
+            log.info("handleForeground — within grace; resuming preserved connection")
+            cancelBackgroundGrace()
+            startKeepalive()
+            return
+        }
         log.info("handleForeground — resetting session")
         isReturningFromBackground = true
         isRecentlyLaunched = true
