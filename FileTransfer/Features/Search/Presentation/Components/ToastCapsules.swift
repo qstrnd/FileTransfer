@@ -44,6 +44,22 @@ struct TextToastCapsule: View {
     }
 }
 
+/// Attention-getting toast for a recoverable error (e.g. a drop with no device selected).
+struct WarningToastCapsule: View {
+    let text: String
+
+    var body: some View {
+        ToastCapsuleShell {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                Text(text)
+                    .font(.subheadline.weight(.semibold))
+            }
+        }
+    }
+}
+
 struct ReceivingToastCapsule: View {
     let progress: ReceivingProgress
 

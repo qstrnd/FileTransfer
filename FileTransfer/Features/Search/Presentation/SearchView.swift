@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SearchView: View {
     var viewModel: SearchViewModel
@@ -11,6 +12,7 @@ struct SearchView: View {
     @State private var showMediaPicker = false
     @State private var showContactPicker = false
     @State private var didBackground = false
+    @State private var isDropTargeted = false
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
@@ -175,6 +177,20 @@ struct SearchView: View {
             )
             .ignoresSafeArea()
         }
+        .onDrop(of: [.image, .movie, .item], isTargeted: $isDropTargeted) { providers in
+            handleDrop(providers)
+            return true
+        }
+        .overlay {
+            if isDropTargeted {
+                RoundedRectangle(cornerRadius: 0)
+                    .strokeBorder(Color.accentColor, lineWidth: 4)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.15), value: isDropTargeted)
         .onAppear {
             viewModel.start()
             withAnimation(.easeIn(duration: 0.5).delay(0.25)) { showRings = true }
@@ -206,6 +222,24 @@ struct SearchView: View {
             default:
                 break
             }
+        }
+    }
+
+    // MARK: - Drag & drop
+
+    /// Sends dropped images/documents to the connected peers. Requires at least
+    /// one selected (connected) device — otherwise it shows an error toast.
+    private func handleDrop(_ providers: [NSItemProvider]) {
+        guard !viewModel.connectedPeers.isEmpty else {
+            ToastCenter.shared.show(id: "dropNoPeers", duration: 3) {
+                WarningToastCapsule(text: "Select a device to share with first")
+            }
+            return
+        }
+        Task {
+            let imported = await DroppedItemImporter.load(providers)
+            if !imported.media.isEmpty { viewModel.sendMedia(imported.media) }
+            if !imported.files.isEmpty { viewModel.sendFiles(imported.files) }
         }
     }
 
