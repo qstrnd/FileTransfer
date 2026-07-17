@@ -38,8 +38,13 @@ final class AppCoordinator {
     }
 
     private static func makeHistoryStore() -> TransferHistoryStore {
+        // Transfer history is device-local; CloudKit sync is explicitly disabled
+        // so records never leave the device (the iCloud entitlement is removed too).
         do {
-            let container = try ModelContainer(for: TransferItem.self)
+            let container = try ModelContainer(
+                for: TransferItem.self,
+                configurations: ModelConfiguration(cloudKitDatabase: .none)
+            )
             return TransferHistoryStore(context: ModelContext(container))
         } catch {
             // Fallback to in-memory if the on-disk container fails to open.
