@@ -76,6 +76,29 @@ final class TransferAttachmentCache: AttachmentCacheGate, @unchecked Sendable {
         try? FileManager.default.removeItem(at: dir)
     }
 
+    func pruneAttachments(olderThan cutoff: Date) async -> [UUID] {
+        await Task.detached(priority: .utility) { [root] in
+            let keys: [URLResourceKey] = [.creationDateKey, .isDirectoryKey]
+            guard let entries = try? FileManager.default.contentsOfDirectory(
+                at: root, includingPropertiesForKeys: keys
+            ) else { return [] }
+
+            var removed: [UUID] = []
+            for url in entries {
+                let values = try? url.resourceValues(forKeys: Set(keys))
+                guard values?.isDirectory == true,
+                      let id = UUID(uuidString: url.lastPathComponent) else { continue }
+                // Missing creation date → treat as ancient so it gets cleaned.
+                let created = values?.creationDate ?? .distantPast
+                if created < cutoff {
+                    try? FileManager.default.removeItem(at: url)
+                    removed.append(id)
+                }
+            }
+            return removed
+        }.value
+    }
+
     // MARK: - Private
 
     private nonisolated static func fallbackBase(for ext: String) -> String {

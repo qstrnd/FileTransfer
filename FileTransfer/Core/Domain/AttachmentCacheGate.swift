@@ -11,4 +11,11 @@ protocol AttachmentCacheGate: Sendable {
     func fileBytes(for urls: [URL]) -> Int64
     /// Removes all cached files for a record.
     func delete(recordID id: UUID)
+    /// Deletes per-record attachment folders created before `cutoff` (judged by
+    /// the folder's filesystem creation date) and returns the record IDs removed.
+    func pruneAttachments(olderThan cutoff: Date) async -> [UUID]
+}
+
+extension AttachmentCacheGate {
+    func pruneAttachments(olderThan cutoff: Date) async -> [UUID] { [] }
 }

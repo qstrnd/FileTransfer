@@ -27,6 +27,22 @@ final class TransferHistoryStore: TransferHistoryGate {
         }
     }
 
+    /// Removes every record dated before `cutoff` and returns their IDs so the
+    /// caller can drop the matching cached attachments.
+    @discardableResult
+    func prune(before cutoff: Date) -> [UUID] {
+        let descriptor = FetchDescriptor<TransferItem>(
+            predicate: #Predicate { $0.date < cutoff }
+        )
+        guard let stale = try? context.fetch(descriptor), !stale.isEmpty else { return [] }
+        let ids = stale.map(\.id)
+        for item in stale { context.delete(item) }
+        try? context.save()
+        let idSet = Set(ids)
+        records.removeAll { idSet.contains($0.id) }
+        return ids
+    }
+
     private func loadAll() {
         let descriptor = FetchDescriptor<TransferItem>(
             sortBy: [SortDescriptor(\.date, order: .reverse)]

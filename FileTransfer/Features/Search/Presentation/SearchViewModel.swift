@@ -38,6 +38,17 @@ final class SearchViewModel {
     /// Live transfer history — reads directly from the @Observable store.
     var transferHistory: [TransferRecord] { historyStore.records }
 
+    /// How long history entries are kept before auto-cleaning. Persisted;
+    /// changing it cleans immediately (initial value is set in `init`, which
+    /// doesn't trigger the observer, so the launch clean is done explicitly).
+    var historyRetention: HistoryRetention = .forever {
+        didSet {
+            UserDefaults.standard.set(historyRetention.rawValue, forKey: Self.historyRetentionKey)
+            cleanHistory()
+        }
+    }
+    private static let historyRetentionKey = "ft.historyRetentionDays"
+
     var connectedPeers: [Peer] { peerStates.filter { $0.value == .connected }.map(\.key) }
     var hasConnectedPeers: Bool { !connectedPeers.isEmpty }
 
@@ -123,6 +134,32 @@ final class SearchViewModel {
             session: service, history: historyStore, attachmentCache: attachmentCache
         )
         sessionAdapter.events = self
+        // Setting a property in init doesn't fire didSet, so read the persisted
+        // retention here and run the launch-time clean explicitly below.
+        historyRetention = HistoryRetention(
+            rawValue: UserDefaults.standard.integer(forKey: Self.historyRetentionKey)
+        ) ?? .forever
+        cleanHistory()
+    }
+
+    // MARK: - History retention
+
+    /// Removes history entries — and their cached attachments — older than the
+    /// current retention. A no-op while retention is `.forever`. Runs the
+    /// filesystem folder sweep off the main actor.
+    func cleanHistory() {
+        guard let cutoff = historyRetention.cutoff() else { return }
+        // Prune every record dated before the cutoff (covers attachment-less
+        // entries like text messages), then drop their cached attachments.
+        let prunedIDs = historyStore.prune(before: cutoff)
+        for id in prunedIDs { attachmentCache.delete(recordID: id) }
+        // Filesystem sweep by each transfer folder's creation date — cleans
+        // orphaned attachment folders and backs up the record-date prune.
+        Task { [weak self] in
+            guard let self else { return }
+            let removed = await attachmentCache.pruneAttachments(olderThan: cutoff)
+            for id in removed { historyStore.delete(id) }
+        }
     }
 
     // MARK: - Lifecycle
@@ -159,6 +196,8 @@ final class SearchViewModel {
     /// connection breaks like a normal background stop.
     func handleBackground() {
         stopKeepalive()
+        // Auto-clean expired history whenever the app leaves the foreground.
+        cleanHistory()
         if !TransferFeatureFlags.backgroundTransferAndLiveActivity, hasActiveOutgoingTransfer {
             beginBackgroundGrace()
             return
