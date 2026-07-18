@@ -1,3 +1,6 @@
+// Live Activities (ActivityKit) don't exist on macOS, so this contract is
+// excluded from the Mac Catalyst build; the app's activity gate no-ops there.
+#if !targetEnvironment(macCatalyst)
 import ActivityKit
 import Foundation
 
@@ -30,3 +33,4 @@ nonisolated struct TransferActivityAttributes: ActivityAttributes, Sendable {
         case send, receive
     }
 }
+#endif

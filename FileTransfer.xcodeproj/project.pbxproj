@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		AF17DEC0DE0000000000000C /* TransferWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AF17DEC0DE00000000000001 /* TransferWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		AF17DEC0DE0000000000000C /* TransferWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AF17DEC0DE00000000000001 /* TransferWidget.appex */; platformFilters = (ios, ); settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -378,6 +378,9 @@
 		};
 		AF17DEC0DE0000000000000E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
+			platformFilters = (
+				ios,
+			);
 			target = AF17DEC0DE00000000000004 /* TransferWidget */;
 			targetProxy = AF17DEC0DE0000000000000D /* PBXContainerItemProxy */;
 		};
@@ -409,6 +412,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.qstrnd.FileTransfer;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTS_MACCATALYST = YES;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -443,6 +448,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.qstrnd.FileTransfer;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTS_MACCATALYST = YES;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;

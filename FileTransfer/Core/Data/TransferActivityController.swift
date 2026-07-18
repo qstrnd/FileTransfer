@@ -1,8 +1,10 @@
+#if !targetEnvironment(macCatalyst)
 // @preconcurrency: ActivityKit's Activity class carries no Sendable
 // annotation even though its async update/end are documented for use from
 // any context (internally synchronized). Without this, strict concurrency
 // rejects every update/end call as an illegal send of a non-Sendable value.
 @preconcurrency import ActivityKit
+#endif
 import Foundation
 import OSLog
 
@@ -19,10 +21,14 @@ import OSLog
 /// `Activity` is not Sendable, so entries hold only the activity's id and a
 /// fresh reference is fetched from `Activity.activities` inside each update
 /// task — the non-Sendable value never crosses an isolation region.
+///
+/// Live Activities don't exist on macOS, so under Mac Catalyst every method
+/// is a no-op.
 @MainActor
 final class TransferActivityController: TransferActivityGate {
     nonisolated private static let log = Logger(subsystem: "com.qstrnd.FileTransfer", category: "LiveActivity")
 
+    #if !targetEnvironment(macCatalyst)
     private struct Entry {
         let activityID: String
         let direction: TransferActivityDirection
@@ -33,10 +39,12 @@ final class TransferActivityController: TransferActivityGate {
 
     private var entries: [String: Entry] = [:]
     private static let staleAfter: TimeInterval = 60
+    #endif
 
     // MARK: - TransferActivityGate
 
     func startActivity(key: String, peerName: String, direction: TransferActivityDirection, totalItems: Int) {
+        #if !targetEnvironment(macCatalyst)
         guard ActivityAuthorizationInfo().areActivitiesEnabled else {
             Self.log.info("live activities disabled — skipping")
             return
@@ -64,9 +72,11 @@ final class TransferActivityController: TransferActivityGate {
             // Foreground-only API; a batch starting while backgrounded lands here.
             Self.log.warning("activity request failed: \(error.localizedDescription, privacy: .public)")
         }
+        #endif
     }
 
     func updateActivity(key: String, progress: Double, completedItems: Int) {
+        #if !targetEnvironment(macCatalyst)
         guard var entry = entries[key] else { return }
         let now = Date.now
         guard progress - entry.lastProgress >= 0.05 || now.timeIntervalSince(entry.lastUpdate) >= 1 else { return }
@@ -82,9 +92,11 @@ final class TransferActivityController: TransferActivityGate {
         deliver(to: entry.activityID) { activity in
             await activity.update(.init(state: state, staleDate: .now + Self.staleAfter))
         }
+        #endif
     }
 
     func endActivity(key: String, outcome: TransferActivityOutcome) {
+        #if !targetEnvironment(macCatalyst)
         guard let entry = entries.removeValue(forKey: key) else { return }
         let state = TransferActivityAttributes.ContentState(
             progress: outcome == .success ? 1 : entry.lastProgress,
@@ -96,10 +108,12 @@ final class TransferActivityController: TransferActivityGate {
         deliver(to: entry.activityID) { activity in
             await activity.end(.init(state: state, staleDate: nil), dismissalPolicy: .after(.now + dwell))
         }
+        #endif
     }
 
     // MARK: - Private
 
+    #if !targetEnvironment(macCatalyst)
     /// Fetches the activity by id and applies `operation` in a detached task.
     nonisolated private func deliver(
         to activityID: String,
@@ -111,4 +125,5 @@ final class TransferActivityController: TransferActivityGate {
             await operation(activity)
         }
     }
+    #endif
 }
