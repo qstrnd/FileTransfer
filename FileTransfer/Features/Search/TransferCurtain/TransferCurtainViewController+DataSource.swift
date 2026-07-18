@@ -78,6 +78,11 @@ extension TransferCurtainViewController {
             header.configure(title: section)
         }
 
+        // Disabled-history banner registration (global header supplementary).
+        let bannerReg = UICollectionView.SupplementaryRegistration<HistoryDisabledBannerSupplementary>(
+            elementKind: HistoryDisabledBannerSupplementary.elementKind
+        ) { _, _, _ in }
+
         dataSource = UICollectionViewDiffableDataSource<String, UUID>(
             collectionView: collectionView
         ) { [weak self] cv, indexPath, id in
@@ -96,8 +101,11 @@ extension TransferCurtainViewController {
             }
         }
 
-        dataSource?.supplementaryViewProvider = { cv, _, indexPath in
-            cv.dequeueConfiguredReusableSupplementary(using: headerReg, for: indexPath)
+        dataSource?.supplementaryViewProvider = { cv, kind, indexPath in
+            if kind == HistoryDisabledBannerSupplementary.elementKind {
+                return cv.dequeueConfiguredReusableSupplementary(using: bannerReg, for: indexPath)
+            }
+            return cv.dequeueConfiguredReusableSupplementary(using: headerReg, for: indexPath)
         }
 
         collectionView.delegate = self
@@ -114,7 +122,31 @@ extension TransferCurtainViewController {
         }
 
         dataSource.apply(snap, animatingDifferences: true)
-        emptyStateView.isHidden = !history.isEmpty
+        refreshBannerLayoutIfNeeded()
+        updateDisabledUI()
+    }
+
+    /// Empty state vs. disabled banner: when history is off, the tray empty
+    /// state is replaced by the disabled banner (centred when there are no
+    /// entries, or the list's first element — a global header — when there are).
+    func updateDisabledUI() {
+        let isEmpty = history.isEmpty
+        if isHistoryDisabled {
+            emptyStateView.isHidden = true
+            disabledBanner.isHidden = !isEmpty
+        } else {
+            disabledBanner.isHidden = true
+            emptyStateView.isHidden = !isEmpty
+        }
+    }
+
+    /// Rebuilds the layout only when the list's disabled-banner header should
+    /// appear or disappear (history off with entries present).
+    func refreshBannerLayoutIfNeeded() {
+        let shouldShow = isHistoryDisabled && !history.isEmpty
+        guard shouldShow != isShowingListBanner else { return }
+        isShowingListBanner = shouldShow
+        collectionView.setCollectionViewLayout(makeHistoryLayout(), animated: false)
     }
 
     func makeHistoryLayout() -> UICollectionViewLayout {
@@ -134,7 +166,21 @@ extension TransferCurtainViewController {
             action.image = UIImage(systemName: "trash")
             return UISwipeActionsConfiguration(actions: [action])
         }
-        return UICollectionViewCompositionalLayout.list(using: config)
+        let layout = UICollectionViewCompositionalLayout.list(using: config)
+        if isHistoryDisabled && !history.isEmpty {
+            // Global header pinned above the first row, so the banner reads as
+            // the list's first element when older entries remain.
+            let size = NSCollectionLayoutSize(
+                widthDimension: .fractionalWidth(1), heightDimension: .estimated(52)
+            )
+            let banner = NSCollectionLayoutBoundarySupplementaryItem(
+                layoutSize: size, elementKind: HistoryDisabledBannerSupplementary.elementKind, alignment: .top
+            )
+            let layoutConfig = UICollectionViewCompositionalLayoutConfiguration()
+            layoutConfig.boundarySupplementaryItems = [banner]
+            layout.configuration = layoutConfig
+        }
+        return layout
     }
 
     // MARK: - Section grouping

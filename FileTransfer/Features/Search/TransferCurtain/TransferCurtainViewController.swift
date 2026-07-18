@@ -70,6 +70,8 @@ final class TransferCurtainViewController: UIViewController {
     let historyHeaderHeight: CGFloat = 44
     let hintLabel = UILabel()
     let emptyStateView = HistoryEmptyStateView()
+    /// Shown centred when history is disabled and there are no entries.
+    let disabledBanner = HistoryDisabledBannerPill()
     private(set) lazy var collectionView = UICollectionView(
         frame: .zero,
         collectionViewLayout: makeHistoryLayout()
@@ -86,6 +88,12 @@ final class TransferCurtainViewController: UIViewController {
     var thumbnailGate: (any HistoryThumbnailGate)?
     var onDeleteRecord: ((UUID) -> Void)?
     var currentPreviewURLs: [URL] = []
+
+    /// True when history recording is turned off; drives the disabled banner.
+    private(set) var isHistoryDisabled = false
+    /// Whether the list currently includes the disabled banner as a global header,
+    /// so the layout is only rebuilt when that actually changes.
+    var isShowingListBanner = false
 
     // MARK: - Pan gesture state
 
@@ -143,6 +151,13 @@ final class TransferCurtainViewController: UIViewController {
         guard selectedCount != self.selectedCount else { return }
         self.selectedCount = selectedCount
         updateSelectionUI()
+    }
+
+    func update(historyDisabled: Bool) {
+        guard historyDisabled != isHistoryDisabled else { return }
+        isHistoryDisabled = historyDisabled
+        refreshBannerLayoutIfNeeded()
+        updateDisabledUI()
     }
 
     func update(history: [TransferRecord]) {

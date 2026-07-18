@@ -27,6 +27,7 @@ struct TransferCurtainView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: TransferCurtainViewController, context: Context) {
         uiViewController.update(selectedCount: viewModel.connectedPeers.count)
+        uiViewController.update(historyDisabled: !viewModel.isHistoryEnabled)
         uiViewController.update(history: viewModel.transferHistory)
         uiViewController.setScrimEnabled(!disableScrim)
 

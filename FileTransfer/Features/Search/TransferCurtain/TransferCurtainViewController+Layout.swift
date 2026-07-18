@@ -164,6 +164,13 @@ extension TransferCurtainViewController {
         emptyStateView.isHidden = true
         sheetView.addSubview(emptyStateView)
 
+        // Disabled-history banner, centred where the empty state sits (shown
+        // only when history is off and there are no entries; when entries
+        // exist the banner instead becomes the list's first element).
+        disabledBanner.translatesAutoresizingMaskIntoConstraints = false
+        disabledBanner.isHidden = true
+        sheetView.addSubview(disabledBanner)
+
         NSLayoutConstraint.activate([
             // Scrim — full screen
             scrimView.topAnchor.constraint(equalTo: view.topAnchor),
@@ -247,6 +254,11 @@ extension TransferCurtainViewController {
             emptyStateView.centerXAnchor.constraint(equalTo: collectionView.centerXAnchor),
             emptyStateView.topAnchor.constraint(equalTo: collectionView.topAnchor, constant: 56),
             emptyStateView.widthAnchor.constraint(equalTo: collectionView.widthAnchor, constant: -48),
+
+            // Disabled banner — centred near the top of the list area.
+            disabledBanner.centerXAnchor.constraint(equalTo: collectionView.centerXAnchor),
+            disabledBanner.topAnchor.constraint(equalTo: collectionView.topAnchor, constant: 24),
+            disabledBanner.widthAnchor.constraint(equalTo: collectionView.widthAnchor, constant: -40),
         ])
     }
 }
