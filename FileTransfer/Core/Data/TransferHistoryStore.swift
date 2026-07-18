@@ -4,6 +4,8 @@ import Foundation
 @Observable
 final class TransferHistoryStore: TransferHistoryGate {
     private(set) var records: [TransferRecord] = []
+    /// When false (history disabled), `add` drops incoming records entirely.
+    var isRecordingEnabled = true
     private let context: ModelContext
 
     init(context: ModelContext) {
@@ -12,6 +14,7 @@ final class TransferHistoryStore: TransferHistoryGate {
     }
 
     func add(_ record: TransferRecord) {
+        guard isRecordingEnabled else { return }
         context.insert(TransferItem(from: record))
         try? context.save()
         records.insert(record, at: 0)

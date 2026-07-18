@@ -44,10 +44,14 @@ final class SearchViewModel {
     var historyRetention: HistoryRetention = .forever {
         didSet {
             UserDefaults.standard.set(historyRetention.rawValue, forKey: Self.historyRetentionKey)
+            historyStore.isRecordingEnabled = historyRetention.isRecordingEnabled
             cleanHistory()
         }
     }
     private static let historyRetentionKey = "ft.historyRetentionDays"
+
+    /// Whether new transfers are being recorded to history.
+    var isHistoryEnabled: Bool { historyRetention.isRecordingEnabled }
 
     var connectedPeers: [Peer] { peerStates.filter { $0.value == .connected }.map(\.key) }
     var hasConnectedPeers: Bool { !connectedPeers.isEmpty }
@@ -139,6 +143,7 @@ final class SearchViewModel {
         historyRetention = HistoryRetention(
             rawValue: UserDefaults.standard.integer(forKey: Self.historyRetentionKey)
         ) ?? .forever
+        historyStore.isRecordingEnabled = historyRetention.isRecordingEnabled
         cleanHistory()
     }
 

@@ -248,14 +248,16 @@ struct SearchView: View {
     private var menuButton: some View {
         Menu {
             Button("Update Profile") { viewModel.goBack() }
-            Divider()
-            Picker("Keep History", selection: Binding(
-                get: { viewModel.historyRetention },
-                set: { viewModel.historyRetention = $0 }
-            )) {
-                ForEach(HistoryRetention.allCases) { retention in
-                    Text(retention.title).tag(retention)
+            Section("Keep Transfer History") {
+                Picker("Keep Transfer History", selection: Binding(
+                    get: { viewModel.historyRetention },
+                    set: { viewModel.historyRetention = $0 }
+                )) {
+                    ForEach(HistoryRetention.allCases) { retention in
+                        Text(retention.title).tag(retention)
+                    }
                 }
+                .pickerStyle(.inline)
             }
         } label: {
             Image(systemName: "ellipsis")
