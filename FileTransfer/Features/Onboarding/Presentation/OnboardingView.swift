@@ -115,7 +115,7 @@ struct OnboardingView: View {
 
                 Spacer()
 
-                if viewModel.source != .device {
+                if !viewModel.matchesDeviceInfo {
                     Button {
                         withAnimation(.spring(duration: 0.3)) { viewModel.useDeviceInfo() }
                     } label: {
