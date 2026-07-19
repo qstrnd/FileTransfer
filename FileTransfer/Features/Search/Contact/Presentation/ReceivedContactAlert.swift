@@ -4,7 +4,6 @@ import UIKit
 struct ReceivedContactAlert: View {
     let transfer: ReceivedContactTransfer?
     let onDismiss: () -> Void
-    let onDeleteRecord: (UUID) -> Void
     let onShare: (Data) -> Void
 
     private func initials(for name: String) -> String {
@@ -17,8 +16,6 @@ struct ReceivedContactAlert: View {
             transfer: transfer,
             senderName: { $0.senderName },
             subtitle: { $0.contacts.count == 1 ? "sent you a contact" : "sent you \($0.contacts.count) contacts" },
-            recordID: { $0.recordID },
-            onDeleteRecord: onDeleteRecord,
             content: { contactSection(for: $0.contacts) },
             actionRows: { transfer in
                 [
@@ -29,7 +26,7 @@ struct ReceivedContactAlert: View {
                         },
                     ],
                     [
-                        ReceivedAlertAction(title: "Close", isSecondary: true) {
+                        ReceivedAlertAction(title: "Close") {
                             onDismiss()
                         },
                     ],
@@ -123,7 +120,7 @@ private func previewPhoto(_ color: UIColor) -> Data {
     )
     ZStack {
         Color(.systemGroupedBackground).ignoresSafeArea()
-        ReceivedContactAlert(transfer: transfer, onDismiss: {}, onDeleteRecord: { _ in }, onShare: { _ in })
+        ReceivedContactAlert(transfer: transfer, onDismiss: {}, onShare: { _ in })
     }
 }
 
@@ -139,14 +136,14 @@ private func previewPhoto(_ color: UIColor) -> Data {
     )
     ZStack {
         Color(.systemGroupedBackground).ignoresSafeArea()
-        ReceivedContactAlert(transfer: transfer, onDismiss: {}, onDeleteRecord: { _ in }, onShare: { _ in })
+        ReceivedContactAlert(transfer: transfer, onDismiss: {}, onShare: { _ in })
     }
 }
 
 #Preview("Hidden") {
     ZStack {
         Color(.systemGroupedBackground).ignoresSafeArea()
-        ReceivedContactAlert(transfer: nil, onDismiss: {}, onDeleteRecord: { _ in }, onShare: { _ in })
+        ReceivedContactAlert(transfer: nil, onDismiss: {}, onShare: { _ in })
     }
 }
 #endif

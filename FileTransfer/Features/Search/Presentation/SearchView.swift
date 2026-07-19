@@ -79,7 +79,6 @@ struct SearchView: View {
                 transfer: viewModel.receivedMedia,
                 thumbnailGate: viewModel.thumbnailGate,
                 onDismiss: { viewModel.receivedMedia = nil },
-                onDeleteRecord: { viewModel.deleteHistoryRecord($0) },
                 onSaveToGallery: { await viewModel.mediaSavingGate.saveToGallery($0) },
                 onSaveToFiles:   { viewModel.mediaSavingGate.saveToFiles($0) },
                 onShare:         { viewModel.mediaSavingGate.share($0) }
@@ -93,7 +92,6 @@ struct SearchView: View {
                 transfer: viewModel.receivedFiles,
                 thumbnailGate: viewModel.historyThumbnailGate,
                 onDismiss: { viewModel.receivedFiles = nil },
-                onDeleteRecord: { viewModel.deleteHistoryRecord($0) },
                 onSaveToFiles: { viewModel.fileSaveService.saveToFiles($0) },
                 onShare:       { viewModel.fileSaveService.share($0) }
             ),
@@ -142,7 +140,6 @@ struct SearchView: View {
             content: ReceivedContactAlert(
                 transfer: viewModel.receivedContact,
                 onDismiss: { viewModel.receivedContact = nil },
-                onDeleteRecord: { viewModel.deleteHistoryRecord($0) },
                 onShare: { data in viewModel.shareReceivedContact(vCardData: data) }
             ),
             isVisible: viewModel.receivedContact != nil,

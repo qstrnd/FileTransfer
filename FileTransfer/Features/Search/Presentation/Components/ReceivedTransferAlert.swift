@@ -4,38 +4,35 @@ import SwiftUI
 struct ReceivedAlertAction: Identifiable {
     let id = UUID()
     let title: String
-    /// Rendered in a muted style (used for the neutral "Close" action).
-    var isSecondary = false
     let action: () -> Void
 }
 
-/// Shared chrome for the "you received X" alerts (media / file / contact).
+/// Shared chrome for the "you received X" alerts (media / file / text / contact).
 ///
-/// Owns the modal scrim, glass card, sender header, the persisted
-/// "Keep in Transfer History" toggle, and the action-button list, so the three
-/// received-transfer alerts stay visually and behaviourally unified. Each
-/// specific alert supplies only its subtitle, preview content, and actions.
+/// Owns the modal scrim, glass card, sender header, the history-retention
+/// notice, and the action-button list, so the received-transfer alerts stay
+/// visually and behaviourally unified. Each specific alert supplies only its
+/// subtitle, preview content, and actions.
 ///
-/// The toggle is persisted across sessions via `@AppStorage`. The history
-/// record for the transfer is always created on receipt; when the alert is
-/// dismissed with the toggle off, that record is removed via `onDeleteRecord`.
+/// The history record for the transfer is created on receipt and kept for the
+/// duration set in the history-retention setting; the notice below the content
+/// tells the user how long that is (or that history is off).
 struct ReceivedTransferAlert<Transfer: Identifiable, Content: View>: View {
     /// Nil hides the alert; the view stays in the hierarchy so transitions play.
     let transfer: Transfer?
     let senderName: (Transfer) -> String
     let subtitle: (Transfer) -> String
-    /// The history record id for this transfer, if any.
-    let recordID: (Transfer) -> UUID?
-    let onDeleteRecord: (UUID) -> Void
     @ViewBuilder let content: (Transfer) -> Content
     /// Action buttons grouped into rows; each row lays its buttons out as
     /// equal-width capsules side by side (e.g. `[[Save to Gallery, Save to
     /// Files], [Share], [Close]]`).
     let actionRows: (Transfer) -> [[ReceivedAlertAction]]
 
-    @AppStorage("ft.keepReceivedInHistory") private var keepInHistory = true
+    @AppStorage("ft.historyRetentionDays") private var retentionDays = HistoryRetention.month.rawValue
 
     private let cardCornerRadius: CGFloat = 20
+
+    private var retention: HistoryRetention { HistoryRetention(rawValue: retentionDays) ?? .month }
 
     var body: some View {
         ZStack {
@@ -79,7 +76,7 @@ struct ReceivedTransferAlert<Transfer: Identifiable, Content: View>: View {
 
             Divider()
 
-            keepToggle
+            retentionNotice
 
             Divider()
 
@@ -90,17 +87,29 @@ struct ReceivedTransferAlert<Transfer: Identifiable, Content: View>: View {
         .padding(.horizontal, 24)
     }
 
-    // MARK: - Keep-in-history toggle
+    // MARK: - History-retention notice
 
-    private var keepToggle: some View {
-        Toggle(isOn: $keepInHistory) {
-            Label("Keep in Transfer History", systemImage: "clock.arrow.circlepath")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+    private var retentionNotice: some View {
+        Label {
+            Text(retentionNoticeText)
+        } icon: {
+            Image(systemName: retention == .disabled ? "clock.badge.xmark" : "clock.arrow.circlepath")
         }
-        .tint(.green)
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
+    }
+
+    private var retentionNoticeText: String {
+        switch retention {
+        case .week:     "This transfer will be kept in Transfer History for 1 week."
+        case .month:    "This transfer will be kept in Transfer History for 1 month."
+        case .forever:  "This transfer will be kept in Transfer History."
+        case .disabled: "This transfer won’t be saved to Transfer History."
+        }
     }
 
     // MARK: - Actions
@@ -111,15 +120,10 @@ struct ReceivedTransferAlert<Transfer: Identifiable, Content: View>: View {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 HStack(spacing: 10) {
                     ForEach(row) { action in
-                        Button {
-                            // Persisted intent applies to this transfer too:
-                            // closing with the toggle off removes the record.
-                            if !keepInHistory, let id = recordID(transfer) { onDeleteRecord(id) }
-                            action.action()
-                        } label: {
+                        Button(action: action.action) {
                             Text(action.title)
                                 .font(.body.weight(.semibold))
-                                .foregroundStyle(action.isSecondary ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+                                .foregroundStyle(.primary)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.8)
                                 .frame(maxWidth: .infinity)

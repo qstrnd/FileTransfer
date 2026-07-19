@@ -5,7 +5,6 @@ struct ReceivedMediaAlert: View {
     let transfer: ReceivedMediaTransfer?
     let thumbnailGate: any ThumbnailGate
     let onDismiss: () -> Void
-    let onDeleteRecord: (UUID) -> Void
     let onSaveToGallery: ([ReceivedMediaItem]) async -> Bool
     let onSaveToFiles: ([ReceivedMediaItem]) -> Void
     let onShare: ([ReceivedMediaItem]) -> Void
@@ -18,8 +17,6 @@ struct ReceivedMediaAlert: View {
                 transfer: transfer,
                 senderName: { $0.senderName },
                 subtitle: { _ in "sent you media" },
-                recordID: { $0.recordID },
-                onDeleteRecord: onDeleteRecord,
                 content: { mediaSection(for: $0.items) },
                 actionRows: { transfer in
                     [
@@ -39,7 +36,7 @@ struct ReceivedMediaAlert: View {
                             },
                         ],
                         [
-                            ReceivedAlertAction(title: "Close", isSecondary: true) {
+                            ReceivedAlertAction(title: "Close") {
                                 onDismiss()
                             },
                         ],

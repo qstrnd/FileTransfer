@@ -1,9 +1,10 @@
 import SwiftUI
 import UIKit
 
-/// Full-screen overlay shown when a text message arrives from a peer.
-/// Follows the same always-in-hierarchy pattern as InvitationAlert so
-/// backdrop and card can animate independently.
+/// Shown when a text message arrives from a peer. Uses the shared
+/// `ReceivedTransferAlert` chrome (header, history-retention notice, button
+/// style) so it matches the media / file / contact alerts, with a selectable
+/// message body and Copy / Close actions.
 struct ReceivedTextAlert: View {
     let message: TransferMessage?
     let onDismiss: () -> Void
@@ -13,85 +14,28 @@ struct ReceivedTextAlert: View {
     /// `CopiedToast` and its `PinnedWindow` in `SearchView`.
     let onCopied: () -> Void
 
-    private let cardCornerRadius: CGFloat = 20
-
     var body: some View {
-        ZStack {
-            if message != nil {
-                Color.black.opacity(0.4)
-                    .ignoresSafeArea()
-                    .allowsHitTesting(true)
-                    .transition(.opacity)
-            }
-            if let message {
-                alertCard(for: message)
-                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
-            }
-        }
-        .animation(.spring(duration: 0.3), value: message?.id)
-    }
-
-    // MARK: - Card
-
-    private func alertCard(for message: TransferMessage) -> some View {
-        let (emoji, name) = Peer.parseDisplayName(message.senderName)
-
-        return VStack(spacing: 0) {
-            // Header
-            VStack(spacing: 6) {
-                Text(emoji)
-                    .font(.system(size: 44))
-                Text(name)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                Text("sent you a message")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.top, 24)
-            .padding(.horizontal, 20)
-            .padding(.bottom, 16)
-
-            Divider()
-
-            // UITextView-backed view for reliable text selection.
-            // isScrollEnabled=false lets UITextView report true content height so
-            // the card sizes dynamically. SwiftUI ScrollView handles overflow.
-            ScrollView {
-                SelectableTextView(text: message.text)
-                    .padding(.horizontal, 4)
-            }
-            .frame(maxHeight: 320)
-
-            Divider()
-
-            // Action row
-            HStack(spacing: 0) {
-                Button {
-                    copyAndDismiss(message.text)
-                } label: {
-                    Text("Copy")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
+        ReceivedTransferAlert(
+            transfer: message,
+            senderName: { $0.senderName },
+            subtitle: { _ in "sent you a message" },
+            content: { message in
+                // UITextView-backed view for reliable text selection.
+                // isScrollEnabled=false lets UITextView report true content height
+                // so the card sizes dynamically. SwiftUI ScrollView handles overflow.
+                ScrollView {
+                    SelectableTextView(text: message.text)
+                        .padding(.horizontal, 4)
                 }
-
-                Divider()
-                    .frame(height: 52)
-
-                Button(action: onDismiss) {
-                    Text("Dismiss")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                }
+                .frame(maxHeight: 320)
+            },
+            actionRows: { message in
+                [
+                    [ReceivedAlertAction(title: "Copy") { copyAndDismiss(message.text) }],
+                    [ReceivedAlertAction(title: "Close") { onDismiss() }],
+                ]
             }
-            .padding(.horizontal, 4)
-            .padding(.vertical, 2)
-        }
-        .glassEffect(in: RoundedRectangle(cornerRadius: cardCornerRadius, style: .continuous))
-        .frame(maxWidth: 400)
-        .padding(.horizontal, 24)
+        )
     }
 
     // MARK: - Actions
