@@ -53,6 +53,14 @@ final class SearchViewModel {
     /// Whether new transfers are being recorded to history.
     var isHistoryEnabled: Bool { historyRetention.isRecordingEnabled }
 
+    // MARK: - Pasteboard sharing
+
+    /// Set when the user taps Pasteboard; drives the confirmation preview alert.
+    /// Cleared on cancel or after the share is confirmed. (Whether the button is
+    /// enabled — i.e. the pasteboard has content — is detected by the curtain
+    /// itself, see `TransferCurtainViewController.refreshPasteboardAvailability`.)
+    var pendingPasteboardShare: PasteboardShareContent?
+
     var connectedPeers: [Peer] { peerStates.filter { $0.value == .connected }.map(\.key) }
     var hasConnectedPeers: Bool { !connectedPeers.isEmpty }
 
@@ -393,6 +401,44 @@ final class SearchViewModel {
     func abortFileTransfer() {
         sendFileUseCase.abort()
         disconnectAll()
+    }
+
+    // MARK: - Pasteboard sharing
+
+    /// Reads and classifies the pasteboard, then asks for confirmation. Reading
+    /// here is what surfaces the system paste banner — done only on explicit tap.
+    func beginPasteboardShare() {
+        guard let content = PasteboardShareImporter.read() else {
+            toastCenter.show(
+                id: "pasteboardEmpty", duration: 3,
+                content: AnyView(WarningToastCapsule(text: "Nothing on the pasteboard to share"))
+            )
+            return
+        }
+        pendingPasteboardShare = content
+    }
+
+    /// Confirmed by the user: routes the content to the matching send path.
+    func confirmPasteboardShare() {
+        guard let content = pendingPasteboardShare else { return }
+        pendingPasteboardShare = nil
+        switch content {
+        case .text(let text):
+            sendText(text)
+        case .images(let urls):
+            let items = urls.map { MediaItem(fileURL: $0, isVideo: false, livePhotoVideoURL: nil, fileName: nil) }
+            sendMedia(items)
+        case .files(let files):
+            sendFiles(files.map(\.url))
+        }
+    }
+
+    /// Dismissed without sharing: drop the content and clean up its temp files.
+    func cancelPasteboardShare() {
+        if let content = pendingPasteboardShare {
+            PasteboardShareImporter.cleanUp(content)
+        }
+        pendingPasteboardShare = nil
     }
 
     func shareReceivedContact(vCardData: Data) {

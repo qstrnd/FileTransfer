@@ -102,6 +102,28 @@ private extension UIColor {
     }
 }
 
+// MARK: - Pasteboard action button palette
+
+// The pasteboard share button has no `TransferType` case, so its indigo tile
+// colors live here as standalone accessors (same light/dark treatment as the
+// palette above).
+extension UIColor {
+    static var pasteboardNormalBG: UIColor {
+        UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(red: 0.157, green: 0.157, blue: 0.278, alpha: 1) // #282847
+                : UIColor(red: 0.929, green: 0.929, blue: 1.000, alpha: 1) // #EDEDFF
+        }
+    }
+    static var pasteboardPressedBG: UIColor {
+        UIColor { traits in
+            traits.userInterfaceStyle == .dark
+                ? UIColor(red: 0.200, green: 0.200, blue: 0.353, alpha: 1) // #33335A
+                : UIColor(red: 0.867, green: 0.867, blue: 1.000, alpha: 1) // #DDDDFF
+        }
+    }
+}
+
 // MARK: - History status badge palette
 
 /// Colors for `HistoryStatusBadge`'s "Received"/"Sent" pill — keyed by

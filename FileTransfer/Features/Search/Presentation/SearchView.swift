@@ -129,6 +129,16 @@ struct SearchView: View {
             hideDelay: 0.45
         ))
         .background(PinnedWindow(
+            content: PasteboardShareAlert(
+                content: viewModel.pendingPasteboardShare,
+                onCancel: { viewModel.cancelPasteboardShare() },
+                onShare:  { viewModel.confirmPasteboardShare() }
+            ),
+            isVisible: viewModel.pendingPasteboardShare != nil,
+            isInteractive: true,
+            hideDelay: 0.2
+        ))
+        .background(PinnedWindow(
             content: ReceivedContactAlert(
                 transfer: viewModel.receivedContact,
                 onDismiss: { viewModel.receivedContact = nil },
@@ -373,10 +383,11 @@ struct SearchView: View {
         TransferCurtainView(
             viewModel: viewModel,
             maxSheetWidth: maxSheetWidth,
-            onShareText:    { showTextShare = true },
-            onSharePhoto:   { showMediaPicker = true },
-            onShareFile:    { showFilePicker = true },
-            onShareContact: { showContactPicker = true }
+            onShareText:       { showTextShare = true },
+            onSharePhoto:      { showMediaPicker = true },
+            onShareFile:       { showFilePicker = true },
+            onShareContact:    { showContactPicker = true },
+            onSharePasteboard: { viewModel.beginPasteboardShare() }
         )
     }
 
@@ -386,10 +397,11 @@ struct SearchView: View {
         TransferCurtainView(
             viewModel: viewModel,
             disableScrim: true,
-            onShareText:    { showTextShare = true },
-            onSharePhoto:   { showMediaPicker = true },
-            onShareFile:    { showFilePicker = true },
-            onShareContact: { showContactPicker = true }
+            onShareText:       { showTextShare = true },
+            onSharePhoto:      { showMediaPicker = true },
+            onShareFile:       { showFilePicker = true },
+            onShareContact:    { showContactPicker = true },
+            onSharePasteboard: { viewModel.beginPasteboardShare() }
         )
     }
 }

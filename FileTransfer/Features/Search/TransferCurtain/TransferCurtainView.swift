@@ -14,10 +14,11 @@ struct TransferCurtainView: UIViewControllerRepresentable {
     var maxSheetWidth: CGFloat? = nil
 
     // Called when the user taps a share action button.
-    var onShareText:    () -> Void
-    var onSharePhoto:   () -> Void
-    var onShareFile:    () -> Void
-    var onShareContact: () -> Void
+    var onShareText:       () -> Void
+    var onSharePhoto:      () -> Void
+    var onShareFile:       () -> Void
+    var onShareContact:    () -> Void
+    var onSharePasteboard: () -> Void
 
     func makeUIViewController(context: Context) -> TransferCurtainViewController {
         let vc = TransferCurtainViewController()
@@ -33,10 +34,11 @@ struct TransferCurtainView: UIViewControllerRepresentable {
 
         // Refresh callbacks on every SwiftUI update so closures that capture
         // @State variables (like showFilePicker) always stay current.
-        uiViewController.onShareText     = onShareText
-        uiViewController.onSharePhoto    = onSharePhoto
-        uiViewController.onShareFile     = onShareFile
-        uiViewController.onShareContact  = onShareContact
+        uiViewController.onShareText       = onShareText
+        uiViewController.onSharePhoto      = onSharePhoto
+        uiViewController.onShareFile       = onShareFile
+        uiViewController.onShareContact    = onShareContact
+        uiViewController.onSharePasteboard = onSharePasteboard
         uiViewController.onClearSelection = { viewModel.disconnectAll() }
         uiViewController.thumbnailGate   = viewModel.historyThumbnailGate
         uiViewController.onDeleteRecord  = { viewModel.deleteHistoryRecord($0) }

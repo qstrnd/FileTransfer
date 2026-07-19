@@ -21,11 +21,12 @@ final class TransferCurtainViewController: UIViewController {
 
     // MARK: - Callbacks (set by the UIViewControllerRepresentable on each update)
 
-    var onShareText:      (() -> Void)?
-    var onSharePhoto:     (() -> Void)?
-    var onShareFile:      (() -> Void)?
-    var onShareContact:   (() -> Void)?
-    var onClearSelection: (() -> Void)?
+    var onShareText:       (() -> Void)?
+    var onSharePhoto:      (() -> Void)?
+    var onShareFile:       (() -> Void)?
+    var onShareContact:    (() -> Void)?
+    var onSharePasteboard: (() -> Void)?
+    var onClearSelection:  (() -> Void)?
 
     // MARK: - Model state
 
@@ -56,7 +57,7 @@ final class TransferCurtainViewController: UIViewController {
         iconTint: TransferType.photo.tintColor
     )
     let fileButton = TransferActionButton(
-        icon: TransferType.file.systemImage, title: "File",
+        icon: TransferType.file.systemImage, title: "Files",
         normalBG: TransferType.file.normalBG, pressedBG: TransferType.file.pressedBG,
         iconTint: TransferType.file.tintColor
     )
@@ -64,6 +65,11 @@ final class TransferCurtainViewController: UIViewController {
         icon: TransferType.contact.systemImage, title: "Contact",
         normalBG: TransferType.contact.normalBG, pressedBG: TransferType.contact.pressedBG,
         iconTint: TransferType.contact.tintColor
+    )
+    let pasteboardButton = TransferActionButton(
+        icon: "document.on.clipboard.fill", title: "Pasteboard",
+        normalBG: .pasteboardNormalBG, pressedBG: .pasteboardPressedBG,
+        iconTint: .systemIndigo
     )
     let headerView = UIView()
     let historyHeaderView = UIView()
@@ -88,6 +94,12 @@ final class TransferCurtainViewController: UIViewController {
     var thumbnailGate: (any HistoryThumbnailGate)?
     var onDeleteRecord: ((UUID) -> Void)?
     var currentPreviewURLs: [URL] = []
+
+    /// True when the pasteboard has shareable content; combined with the
+    /// selection state to enable the Pasteboard button.
+    private(set) var isPasteboardAvailable = false
+    // Removed once, in deinit, after main-actor access has ceased.
+    nonisolated(unsafe) private var pasteboardObservers: [NSObjectProtocol] = []
 
     /// True when history recording is turned off; drives the disabled banner.
     private(set) var isHistoryDisabled = false
@@ -118,8 +130,14 @@ final class TransferCurtainViewController: UIViewController {
         buildViewHierarchy()
         setupDataSource()
         setupPanGesture()
+        registerPasteboardObservers()
+        refreshPasteboardAvailability()
         updateSelectionUI()
         applySnapshot()
+    }
+
+    deinit {
+        pasteboardObservers.forEach(NotificationCenter.default.removeObserver)
     }
 
     override func viewDidLayoutSubviews() {
@@ -151,6 +169,31 @@ final class TransferCurtainViewController: UIViewController {
         guard selectedCount != self.selectedCount else { return }
         self.selectedCount = selectedCount
         updateSelectionUI()
+    }
+
+    /// Re-checks whether the pasteboard has shareable content and refreshes the
+    /// Pasteboard button. Driven by the curtain's own pasteboard observers (not
+    /// SwiftUI), so the button stays correct the instant the pasteboard changes
+    /// even when nothing else on screen does. Uses the permission-free detection
+    /// API, so it never triggers the paste disclosure.
+    func refreshPasteboardAvailability() {
+        let available = PasteboardShareImporter.hasContent
+        guard available != isPasteboardAvailable else { return }
+        isPasteboardAvailable = available
+        updateSelectionUI()
+    }
+
+    private func registerPasteboardObservers() {
+        guard pasteboardObservers.isEmpty else { return }
+        let center = NotificationCenter.default
+        // `changedNotification` fires only while the app is active; pair it with
+        // a foreground refresh so a copy made in another app is picked up on return.
+        for name in [UIPasteboard.changedNotification, UIApplication.didBecomeActiveNotification] {
+            let token = center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.refreshPasteboardAvailability() }
+            }
+            pasteboardObservers.append(token)
+        }
     }
 
     func update(historyDisabled: Bool) {
@@ -189,13 +232,16 @@ final class TransferCurtainViewController: UIViewController {
         let enabled = selectedCount > 0
         clearButton.isHidden = !enabled
         [textButton, photoButton, fileButton, contactButton].forEach { $0.isEnabled = enabled }
+        // Pasteboard additionally requires something to share.
+        pasteboardButton.isEnabled = enabled && isPasteboardAvailable
     }
 
     // MARK: - Button actions
 
-    @objc func clearTapped()  { onClearSelection?() }
-    @objc func textTapped()   { onShareText?() }
-    @objc func photoTapped()  { onSharePhoto?() }
-    @objc func fileTapped()   { onShareFile?() }
-    @objc func contactTapped(){ onShareContact?() }
+    @objc func clearTapped()      { onClearSelection?() }
+    @objc func textTapped()       { onShareText?() }
+    @objc func photoTapped()      { onSharePhoto?() }
+    @objc func fileTapped()       { onShareFile?() }
+    @objc func contactTapped()    { onShareContact?() }
+    @objc func pasteboardTapped() { onSharePasteboard?() }
 }

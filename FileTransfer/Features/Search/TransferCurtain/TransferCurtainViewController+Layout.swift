@@ -101,16 +101,18 @@ extension TransferCurtainViewController {
         headerView.addSubview(selRow)
 
         // Action buttons row
-        textButton.addTarget(self,    action: #selector(textTapped),    for: .touchUpInside)
-        photoButton.addTarget(self,   action: #selector(photoTapped),   for: .touchUpInside)
-        fileButton.addTarget(self,    action: #selector(fileTapped),    for: .touchUpInside)
-        contactButton.addTarget(self, action: #selector(contactTapped), for: .touchUpInside)
+        textButton.addTarget(self,       action: #selector(textTapped),       for: .touchUpInside)
+        photoButton.addTarget(self,      action: #selector(photoTapped),      for: .touchUpInside)
+        fileButton.addTarget(self,       action: #selector(fileTapped),       for: .touchUpInside)
+        contactButton.addTarget(self,    action: #selector(contactTapped),    for: .touchUpInside)
+        pasteboardButton.addTarget(self, action: #selector(pasteboardTapped), for: .touchUpInside)
 
-        // Contact sharing is suspended (see TransferFeatureFlags); omit its
-        // button entirely when off so the remaining actions fill the row.
+        // Pasteboard sits top-left; contact sharing is suspended (see
+        // TransferFeatureFlags) so its button is omitted when off, letting the
+        // remaining actions fill the row.
         let actionButtons: [UIView] = TransferFeatureFlags.contactSharing
-            ? [contactButton, fileButton, photoButton, textButton]
-            : [fileButton, photoButton, textButton]
+            ? [pasteboardButton, contactButton, fileButton, photoButton, textButton]
+            : [pasteboardButton, fileButton, photoButton, textButton]
         let actionsRow = UIStackView(arrangedSubviews: actionButtons)
         actionsRow.axis = .horizontal
         actionsRow.distribution = .fillEqually
