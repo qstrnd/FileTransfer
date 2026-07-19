@@ -46,6 +46,13 @@ struct PinnedWindow<Content: View>: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
+        // Refresh the captured parent so config read in the coordinator
+        // (isInteractive, hideDelay, becomesKey, …) reflects the *current*
+        // render rather than the value at coordinator-creation time. Without
+        // this, a dynamic `isInteractive` evaluated to false on the first
+        // render (before the transfer exists) stays false forever, leaving the
+        // window non-modal — touches fall through to the app below.
+        context.coordinator.parent = self
         context.coordinator.update(content: content, isVisible: isVisible, anchoredTo: uiView)
     }
 
@@ -54,7 +61,9 @@ struct PinnedWindow<Content: View>: UIViewRepresentable {
     // MARK: - Coordinator
 
     final class Coordinator {
-        private let parent: PinnedWindow<Content>
+        /// Updated on every `updateUIView` so config reads reflect the current
+        /// render, not the stale value captured when the coordinator was made.
+        var parent: PinnedWindow<Content>
         private var window: UIWindow?
         private var host: UIHostingController<ModalRoot<Content>>?
         private var pendingHide: DispatchWorkItem?
