@@ -38,20 +38,12 @@ final class SearchViewModel {
     /// Live transfer history — reads directly from the @Observable store.
     var transferHistory: [TransferRecord] { historyStore.records }
 
-    /// How long history entries are kept before auto-cleaning. Persisted;
-    /// changing it cleans immediately (initial value is set in `init`, which
-    /// doesn't trigger the observer, so the launch clean is done explicitly).
-    var historyRetention: HistoryRetention = .month {
-        didSet {
-            UserDefaults.standard.set(historyRetention.rawValue, forKey: Self.historyRetentionKey)
-            historyStore.isRecordingEnabled = historyRetention.isRecordingEnabled
-            cleanHistory()
-        }
-    }
-    private static let historyRetentionKey = "ft.historyRetentionDays"
+    /// The ⋯ menu's settings (history retention), extracted into its own
+    /// component view model. Owns persistence and history auto-cleaning.
+    let settings: SettingsMenuViewModel
 
     /// Whether new transfers are being recorded to history.
-    var isHistoryEnabled: Bool { historyRetention.isRecordingEnabled }
+    var isHistoryEnabled: Bool { settings.isHistoryEnabled }
 
     // MARK: - Pasteboard sharing
 
@@ -145,34 +137,9 @@ final class SearchViewModel {
         self.sendFileUseCase = SendFileUseCase(
             session: service, history: historyStore, attachmentCache: attachmentCache
         )
+        // Owns the retention setting and the launch-time / on-change history clean.
+        self.settings = SettingsMenuViewModel(historyStore: historyStore, attachmentCache: attachmentCache)
         sessionAdapter.events = self
-        // Setting a property in init doesn't fire didSet, so read the persisted
-        // retention here and run the launch-time clean explicitly below. When the
-        // user hasn't chosen yet the key is absent (not 0), so default to 1 Month.
-        let storedRetention = UserDefaults.standard.object(forKey: Self.historyRetentionKey) as? Int
-        historyRetention = storedRetention.flatMap(HistoryRetention.init(rawValue:)) ?? .month
-        historyStore.isRecordingEnabled = historyRetention.isRecordingEnabled
-        cleanHistory()
-    }
-
-    // MARK: - History retention
-
-    /// Removes history entries — and their cached attachments — older than the
-    /// current retention. A no-op while retention is `.forever`. Runs the
-    /// filesystem folder sweep off the main actor.
-    func cleanHistory() {
-        guard let cutoff = historyRetention.cutoff() else { return }
-        // Prune every record dated before the cutoff (covers attachment-less
-        // entries like text messages), then drop their cached attachments.
-        let prunedIDs = historyStore.prune(before: cutoff)
-        for id in prunedIDs { attachmentCache.delete(recordID: id) }
-        // Filesystem sweep by each transfer folder's creation date — cleans
-        // orphaned attachment folders and backs up the record-date prune.
-        Task { [weak self] in
-            guard let self else { return }
-            let removed = await attachmentCache.pruneAttachments(olderThan: cutoff)
-            for id in removed { historyStore.delete(id) }
-        }
     }
 
     // MARK: - Lifecycle
@@ -210,7 +177,7 @@ final class SearchViewModel {
     func handleBackground() {
         stopKeepalive()
         // Auto-clean expired history whenever the app leaves the foreground.
-        cleanHistory()
+        settings.cleanHistory()
         if !TransferFeatureFlags.backgroundTransferAndLiveActivity, hasActiveOutgoingTransfer {
             beginBackgroundGrace()
             return

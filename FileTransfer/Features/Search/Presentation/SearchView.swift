@@ -253,32 +253,10 @@ struct SearchView: View {
     // MARK: - Menu
 
     private var menuButton: some View {
-        Menu {
-            Button("Update Profile") { viewModel.goBack() }
-            Section("Keep Transfer History") {
-                ForEach(HistoryRetention.allCases) { retention in
-                    Button {
-                        viewModel.historyRetention = retention
-                    } label: {
-                        if viewModel.historyRetention == retention {
-                            Label(retention.title, systemImage: "checkmark")
-                        } else {
-                            Text(retention.title)
-                        }
-                    }
-                }
-            }
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.primary)
-                .frame(width: 30, height: 30)
-        }
-        .menuStyle(.button)
-        .buttonStyle(.glass)
-        .buttonBorderShape(.circle)
-        .padding(.top, 8)
-        .padding(.trailing, 20)
+        SettingsMenu(
+            viewModel: viewModel.settings,
+            onUpdateProfile: { viewModel.goBack() }
+        )
     }
 
     // MARK: - Layouts
