@@ -44,6 +44,12 @@ struct SearchViewModelTests {
 
     private let myDeviceID = UUID()
 
+    /// A throwaway defaults suite per VM so settings (retention, auto-connect)
+    /// never touch — or leak between — the shared standard defaults.
+    private func isolatedDefaults() -> UserDefaults {
+        UserDefaults(suiteName: "SearchViewModelTests.\(UUID().uuidString)")!
+    }
+
     private func makeVM(
         history: InMemoryConnectionHistoryStore = .init()
     ) -> (SearchViewModel, SpyNearbyService) {
@@ -54,6 +60,7 @@ struct SearchViewModelTests {
             service: service,
             connectionHistory: history,
             historyStore: .preview,
+            settingsDefaults: isolatedDefaults(),
             onBack: {}
         )
         return (vm, service)
@@ -71,6 +78,7 @@ struct SearchViewModelTests {
             connectionHistory: history,
             historyStore: .preview,
             toastCenter: toastCenter,
+            settingsDefaults: isolatedDefaults(),
             onBack: {}
         )
         return (vm, service, toastCenter)
@@ -78,6 +86,21 @@ struct SearchViewModelTests {
 
     private func peer(_ name: String = "🐟 Fish") -> Peer {
         Peer(displayName: name, deviceID: UUID())
+    }
+
+    /// Polls `condition` until it holds or the timeout elapses. Needed because all
+    /// @MainActor test bodies share one actor, so a fixed sleep can't reliably
+    /// bound when a deferred reconnect Task actually resumes under parallel load.
+    private func waitUntil(
+        timeout: Duration = .seconds(5),
+        _ condition: () -> Bool
+    ) async -> Bool {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        while ContinuousClock.now < deadline {
+            if condition() { return true }
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        return condition()
     }
 
     // MARK: - Auto-reconnect
@@ -117,6 +140,58 @@ struct SearchViewModelTests {
 
         #expect(service.connectCalls.count == connectsBefore,
                 "no new connect expected after manual disconnect")
+    }
+
+    // MARK: - Auto-connect On Startup toggle
+
+    @Test func autoConnectOn_discoveringKnownPeer_autoReconnects() async throws {
+        // Positive control: with the toggle on (default), discovering a known
+        // peer while returning from background triggers an auto-reconnect.
+        let history = InMemoryConnectionHistoryStore()
+        let peerID = UUID()
+        history.record(ConnectionRecord(deviceID: peerID, displayName: "🐟 Fish", lastConnected: .now))
+        let (vm, service) = makeVM(history: history)
+        vm.handleForeground()   // isReturningFromBackground bypasses the UUID tiebreaker
+        let p = Peer(displayName: "🐟 Fish", deviceID: peerID)
+
+        vm.peerDiscovered(p)
+
+        let reconnected = await waitUntil { service.connectCalls.contains { $0.isReconnect } }
+        #expect(reconnected)
+    }
+
+    @Test func autoConnectOff_discoveringKnownPeer_doesNotAutoReconnect() async throws {
+        // Same setup, but the toggle is off → no auto-reconnect is initiated.
+        let history = InMemoryConnectionHistoryStore()
+        let peerID = UUID()
+        history.record(ConnectionRecord(deviceID: peerID, displayName: "🐟 Fish", lastConnected: .now))
+        let (vm, service) = makeVM(history: history)
+        vm.settings.autoConnectOnStartup = false
+        vm.handleForeground()
+        let p = Peer(displayName: "🐟 Fish", deviceID: peerID)
+
+        vm.peerDiscovered(p)
+        try await Task.sleep(for: .milliseconds(700))
+
+        #expect(service.connectCalls.isEmpty)
+    }
+
+    @Test func autoConnectOff_reconnectInvitationFromKnownPeer_fallsBackToManualAlert() {
+        // A known peer's reconnect invitation is auto-accepted only when the
+        // toggle is on; off → show the manual accept/decline alert instead.
+        let history = InMemoryConnectionHistoryStore()
+        let peerID = UUID()
+        history.record(ConnectionRecord(deviceID: peerID, displayName: "🐟 Fish", lastConnected: .now))
+        let (vm, service) = makeVM(history: history)
+        vm.settings.autoConnectOnStartup = false
+        let p = Peer(displayName: "🐟 Fish", deviceID: peerID)
+        vm.peerDiscovered(p)
+
+        vm.reconnectInvitationReceived(from: p)
+
+        #expect(service.acceptCallCount == 0)
+        #expect(vm.peerStates[p] != .connected)
+        #expect(vm.pendingInvitationFrom == p)
     }
 
     // MARK: - peerDiscovered

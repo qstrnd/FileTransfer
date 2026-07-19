@@ -116,6 +116,7 @@ final class SearchViewModel {
         thumbnailGate: any ThumbnailGate = MediaThumbnailService(),
         historyThumbnailGate: any HistoryThumbnailGate = HistoryThumbnailService(),
         toastCenter: any ToastPresenting = ToastCenter.shared,
+        settingsDefaults: UserDefaults = .standard,
         onBack: @escaping () -> Void
     ) {
         self.emoji = emoji
@@ -138,7 +139,9 @@ final class SearchViewModel {
             session: service, history: historyStore, attachmentCache: attachmentCache
         )
         // Owns the retention setting and the launch-time / on-change history clean.
-        self.settings = SettingsMenuViewModel(historyStore: historyStore, attachmentCache: attachmentCache)
+        self.settings = SettingsMenuViewModel(
+            historyStore: historyStore, attachmentCache: attachmentCache, defaults: settingsDefaults
+        )
         sessionAdapter.events = self
     }
 

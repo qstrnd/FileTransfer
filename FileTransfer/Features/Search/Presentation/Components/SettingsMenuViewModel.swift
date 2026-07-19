@@ -12,7 +12,7 @@ import Observation
 final class SettingsMenuViewModel {
     var historyRetention: HistoryRetention {
         didSet {
-            UserDefaults.standard.set(historyRetention.rawValue, forKey: Self.retentionKey)
+            defaults.set(historyRetention.rawValue, forKey: Self.retentionKey)
             historyStore.isRecordingEnabled = historyRetention.isRecordingEnabled
             cleanHistory()
         }
@@ -26,25 +26,31 @@ final class SettingsMenuViewModel {
     /// initiated manually — nothing auto-connects and incoming reconnect
     /// invitations fall back to the manual accept/decline alert.
     var autoConnectOnStartup: Bool {
-        didSet { UserDefaults.standard.set(autoConnectOnStartup, forKey: Self.autoConnectKey) }
+        didSet { defaults.set(autoConnectOnStartup, forKey: Self.autoConnectKey) }
     }
 
     private let historyStore: TransferHistoryStore
     private let attachmentCache: any AttachmentCacheGate
+    private let defaults: UserDefaults
 
     static let retentionKey = "ft.historyRetentionDays"
     static let autoConnectKey = "ft.autoConnectOnStartup"
 
-    init(historyStore: TransferHistoryStore, attachmentCache: any AttachmentCacheGate) {
+    init(
+        historyStore: TransferHistoryStore,
+        attachmentCache: any AttachmentCacheGate,
+        defaults: UserDefaults = .standard
+    ) {
         self.historyStore = historyStore
         self.attachmentCache = attachmentCache
+        self.defaults = defaults
         // Setting a property in init doesn't fire didSet, so read the persisted
         // retention here and run the launch-time clean explicitly below. When the
         // user hasn't chosen yet the key is absent (not 0), so default to 1 Month.
-        let stored = UserDefaults.standard.object(forKey: Self.retentionKey) as? Int
+        let stored = defaults.object(forKey: Self.retentionKey) as? Int
         historyRetention = stored.flatMap(HistoryRetention.init(rawValue:)) ?? .month
         // Absent key → on by default.
-        autoConnectOnStartup = UserDefaults.standard.object(forKey: Self.autoConnectKey) as? Bool ?? true
+        autoConnectOnStartup = defaults.object(forKey: Self.autoConnectKey) as? Bool ?? true
         historyStore.isRecordingEnabled = historyRetention.isRecordingEnabled
         cleanHistory()
     }
