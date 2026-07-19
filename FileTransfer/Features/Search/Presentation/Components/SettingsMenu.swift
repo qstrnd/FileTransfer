@@ -6,12 +6,13 @@ import SwiftUI
 /// The toggle-able settings live in `SettingsMenuViewModel`; the profile
 /// shortcut is a plain navigation callback owned by the screen.
 struct SettingsMenu: View {
-    var viewModel: SettingsMenuViewModel
+    @Bindable var viewModel: SettingsMenuViewModel
     var onUpdateProfile: () -> Void
 
     var body: some View {
         Menu {
             Button("Update Profile") { onUpdateProfile() }
+            Toggle("Auto-connect On Startup", isOn: $viewModel.autoConnectOnStartup)
             Section("Keep Transfer History") {
                 ForEach(HistoryRetention.allCases) { retention in
                     Button {

@@ -21,10 +21,19 @@ final class SettingsMenuViewModel {
     /// Whether new transfers are recorded to history at all.
     var isHistoryEnabled: Bool { historyRetention.isRecordingEnabled }
 
+    /// When on (the default), the app automatically (re)connects to previously
+    /// connected devices as they're discovered. When off, all connections are
+    /// initiated manually — nothing auto-connects and incoming reconnect
+    /// invitations fall back to the manual accept/decline alert.
+    var autoConnectOnStartup: Bool {
+        didSet { UserDefaults.standard.set(autoConnectOnStartup, forKey: Self.autoConnectKey) }
+    }
+
     private let historyStore: TransferHistoryStore
     private let attachmentCache: any AttachmentCacheGate
 
     static let retentionKey = "ft.historyRetentionDays"
+    static let autoConnectKey = "ft.autoConnectOnStartup"
 
     init(historyStore: TransferHistoryStore, attachmentCache: any AttachmentCacheGate) {
         self.historyStore = historyStore
@@ -34,6 +43,8 @@ final class SettingsMenuViewModel {
         // user hasn't chosen yet the key is absent (not 0), so default to 1 Month.
         let stored = UserDefaults.standard.object(forKey: Self.retentionKey) as? Int
         historyRetention = stored.flatMap(HistoryRetention.init(rawValue:)) ?? .month
+        // Absent key → on by default.
+        autoConnectOnStartup = UserDefaults.standard.object(forKey: Self.autoConnectKey) as? Bool ?? true
         historyStore.isRecordingEnabled = historyRetention.isRecordingEnabled
         cleanHistory()
     }

@@ -551,7 +551,8 @@ extension SearchViewModel: PeerSessionEvents {
     }
 
     private func maybeAutoReconnect(to peer: Peer) {
-        guard let peerDeviceID = peer.deviceID,
+        guard settings.autoConnectOnStartup,
+              let peerDeviceID = peer.deviceID,
               connectionHistory.hasConnected(to: peerDeviceID),
               (peerStates[peer] ?? .idle) == .idle,
               !manuallyDisconnectedPeers.contains(peer.id) else { return }
@@ -709,6 +710,13 @@ extension SearchViewModel: PeerSessionEvents {
         guard reconnectState == .idle else {
             log.info("reconnectInvitationReceived — declining; already \(String(describing: reconnectState), privacy: .public) for \(peer.displayName, privacy: .public)")
             service.declineInvitation()
+            return
+        }
+        // With auto-connect off, don't silently accept — let the user decide via
+        // the manual invitation alert.
+        guard settings.autoConnectOnStartup else {
+            log.info("reconnectInvitationReceived — auto-connect off, showing manual invite for \(peer.displayName, privacy: .public)")
+            invitationReceived(from: peer)
             return
         }
         // deviceID may be nil if the browser hasn't fired foundPeer yet; fall back to
