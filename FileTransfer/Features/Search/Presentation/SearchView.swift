@@ -249,15 +249,17 @@ struct SearchView: View {
         Menu {
             Button("Update Profile") { viewModel.goBack() }
             Section("Keep Transfer History") {
-                Picker("Keep Transfer History", selection: Binding(
-                    get: { viewModel.historyRetention },
-                    set: { viewModel.historyRetention = $0 }
-                )) {
-                    ForEach(HistoryRetention.allCases) { retention in
-                        Text(retention.title).tag(retention)
+                ForEach(HistoryRetention.allCases) { retention in
+                    Button {
+                        viewModel.historyRetention = retention
+                    } label: {
+                        if viewModel.historyRetention == retention {
+                            Label(retention.title, systemImage: "checkmark")
+                        } else {
+                            Text(retention.title)
+                        }
                     }
                 }
-                .pickerStyle(.inline)
             }
         } label: {
             Image(systemName: "ellipsis")

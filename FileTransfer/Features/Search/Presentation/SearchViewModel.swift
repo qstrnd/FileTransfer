@@ -41,7 +41,7 @@ final class SearchViewModel {
     /// How long history entries are kept before auto-cleaning. Persisted;
     /// changing it cleans immediately (initial value is set in `init`, which
     /// doesn't trigger the observer, so the launch clean is done explicitly).
-    var historyRetention: HistoryRetention = .forever {
+    var historyRetention: HistoryRetention = .month {
         didSet {
             UserDefaults.standard.set(historyRetention.rawValue, forKey: Self.historyRetentionKey)
             historyStore.isRecordingEnabled = historyRetention.isRecordingEnabled
@@ -139,10 +139,10 @@ final class SearchViewModel {
         )
         sessionAdapter.events = self
         // Setting a property in init doesn't fire didSet, so read the persisted
-        // retention here and run the launch-time clean explicitly below.
-        historyRetention = HistoryRetention(
-            rawValue: UserDefaults.standard.integer(forKey: Self.historyRetentionKey)
-        ) ?? .forever
+        // retention here and run the launch-time clean explicitly below. When the
+        // user hasn't chosen yet the key is absent (not 0), so default to 1 Month.
+        let storedRetention = UserDefaults.standard.object(forKey: Self.historyRetentionKey) as? Int
+        historyRetention = storedRetention.flatMap(HistoryRetention.init(rawValue:)) ?? .month
         historyStore.isRecordingEnabled = historyRetention.isRecordingEnabled
         cleanHistory()
     }
