@@ -6,15 +6,28 @@ struct OnboardingView: View {
     @State private var viewModel: OnboardingViewModel
     var namespace: Namespace.ID
 
+    /// True on the very first launch (no saved profile yet), when the tap hints
+    /// and the emoji bounce are shown. False when re-editing an existing profile.
+    private let isFirstLaunch: Bool
+
     init(onProceed: @escaping (String, String) -> Void, namespace: Namespace.ID, initialProfile: UserProfile? = nil) {
         _viewModel = State(initialValue: OnboardingViewModel(onProceed: onProceed, initialProfile: initialProfile))
         self.namespace = namespace
+        self.isFirstLaunch = initialProfile == nil
     }
 
     @FocusState private var isNameFocused: Bool
     @State private var isEmojiPickerActive = false
+    /// Latches once the user taps the icon or name, permanently dismissing the hints.
+    @State private var hasEngaged = false
+    /// Drives the one-time attention bounce on the emoji circle.
+    @State private var iconBounce = false
 
     private var isKeyboardVisible: Bool { isNameFocused || isEmojiPickerActive }
+
+    /// The first-launch "tap to change / edit" hints are shown until the user
+    /// interacts with either the icon or the name.
+    private var showsTapHint: Bool { isFirstLaunch && !hasEngaged }
 
     var body: some View {
         ZStack {
@@ -35,6 +48,9 @@ struct OnboardingView: View {
                 bottomBar
             }
             .animation(.easeOut(duration: 0.25), value: isKeyboardVisible)
+        }
+        .onChange(of: isKeyboardVisible) { _, visible in
+            if visible { hasEngaged = true }
         }
         .overlay(alignment: .topLeading) {
             EmojiKeyboard(
@@ -60,34 +76,68 @@ struct OnboardingView: View {
 
     private var identitySection: some View {
         VStack(spacing: 24) {
-            Button {
-                isNameFocused = false
-                isEmojiPickerActive = true
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(Color.avatarBubbleBackground)
-                        .frame(width: 128, height: 128)
-                        .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 2)
-                    Text(viewModel.emoji)
-                        .font(.system(size: 64))
+            VStack(spacing: 10) {
+                Button {
+                    isNameFocused = false
+                    isEmojiPickerActive = true
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(Color.avatarBubbleBackground)
+                            .frame(width: 128, height: 128)
+                            .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 2)
+                        Text(viewModel.emoji)
+                            .font(.system(size: 64))
+                    }
+                    .scaleEffect(iconBounce ? 1.08 : 1)
+                    .matchedGeometryEffect(id: "heroCircle", in: namespace, isSource: true)
                 }
-                .matchedGeometryEffect(id: "heroCircle", in: namespace, isSource: true)
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
 
-            TextField("Your name", text: Binding(
-                    get: { viewModel.name },
-                    set: { viewModel.nameEditedByUser(to: $0) }
-                ))
-                .font(.system(size: 28, weight: .bold))
-                .multilineTextAlignment(.center)
-                .focused($isNameFocused)
-                .submitLabel(.done)
-                .onSubmit { isNameFocused = false }
-                .textFieldStyle(.plain)
+            VStack(spacing: 8) {
+                TextField("Your name", text: Binding(
+                        get: { viewModel.name },
+                        set: { viewModel.nameEditedByUser(to: $0) }
+                    ))
+                    .font(.system(size: 28, weight: .bold))
+                    .multilineTextAlignment(.center)
+                    .textInputAutocapitalization(.words)
+                    .focused($isNameFocused)
+                    .submitLabel(.done)
+                    .onSubmit { isNameFocused = false }
+                    .textFieldStyle(.plain)
+
+                if showsTapHint {
+                    tapHint("Tap the emoji or name to edit")
+                        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                }
+            }
         }
         .padding(.horizontal, 32)
+        .animation(.easeOut(duration: 0.25), value: showsTapHint)
+        .onAppear {
+            guard isFirstLaunch else { return }
+            // A gentle, one-time bounce that draws the eye to the tappable icon,
+            // then settles back to rest.
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.42).delay(0.35)) {
+                iconBounce = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.85) {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.72)) {
+                    iconBounce = false
+                }
+            }
+        }
+    }
+
+    private func tapHint(_ text: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "hand.tap.fill")
+            Text(text)
+        }
+        .font(.footnote.weight(.medium))
+        .foregroundStyle(.secondary)
     }
 
     // MARK: Subtitle
