@@ -88,12 +88,14 @@ final class HistoryMediaCell: HistoryBaseCell {
         contentContainer.addSubview(metaLabel)
 
         NSLayoutConstraint.activate([
-            thumbnailView.topAnchor.constraint(equalTo: contentContainer.topAnchor, constant: 4),
+            // Top edge aligned to the mid-height of the Sent/Received badge.
+            thumbnailView.topAnchor.constraint(equalTo: statusBadge.centerYAnchor),
             thumbnailView.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
             thumbnailView.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
             thumbnailView.heightAnchor.constraint(equalToConstant: 160),
 
-            metaLabel.topAnchor.constraint(equalTo: thumbnailView.bottomAnchor, constant: 6),
+            // Gap leaves room for the overflow button in the meta row.
+            metaLabel.topAnchor.constraint(equalTo: thumbnailView.bottomAnchor, constant: 12),
             metaLabel.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
             metaLabel.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
             metaLabel.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor, constant: -10),

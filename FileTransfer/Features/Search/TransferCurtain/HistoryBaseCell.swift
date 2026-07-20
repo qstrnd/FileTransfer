@@ -152,9 +152,11 @@ class HistoryBaseCell: UICollectionViewCell {
             separator.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
             separator.heightAnchor.constraint(equalToConstant: 0.5),
 
-            // Overflow button: cell's bottom-right corner.
+            // Overflow button: trailing edge, in the meta row below the content
+            // (subclasses leave a gap between their content and the meta label so
+            // the button never overlaps the image/document).
             overflowButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            overflowButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12),
+            overflowButton.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor, constant: -6),
         ])
 
         // Ensure the cell is always tall enough to show the full avatar cluster.

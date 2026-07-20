@@ -184,7 +184,8 @@ final class HistoryMultiItemCell: HistoryBaseCell {
 
         let gw = Self.edgeGradientWidth
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: contentContainer.topAnchor, constant: 4),
+            // Top edge aligned to the mid-height of the Sent/Received badge.
+            scrollView.topAnchor.constraint(equalTo: statusBadge.centerYAnchor),
             scrollView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             scrollView.heightAnchor.constraint(equalToConstant: Self.fixedItemSize),
@@ -205,7 +206,8 @@ final class HistoryMultiItemCell: HistoryBaseCell {
             rightGradient.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             rightGradient.widthAnchor.constraint(equalToConstant: gw),
 
-            metaLabel.topAnchor.constraint(equalTo: scrollView.bottomAnchor, constant: 6),
+            // Gap leaves room for the overflow button in the meta row.
+            metaLabel.topAnchor.constraint(equalTo: scrollView.bottomAnchor, constant: 12),
             metaLabel.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
             metaLabel.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
             metaLabel.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor, constant: -10),
