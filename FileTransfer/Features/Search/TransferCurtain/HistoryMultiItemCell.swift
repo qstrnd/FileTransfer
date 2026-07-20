@@ -58,6 +58,9 @@ final class HistoryMultiItemCell: HistoryBaseCell {
     private let leftGradient  = EdgeGradientView(isLeading: true)
     private let rightGradient = EdgeGradientView(isLeading: false)
 
+    /// ⋯ overflow button floating over the strip's bottom-right corner.
+    let moreButton = HistoryMoreButton()
+
     private let scrollView: UIScrollView = {
         let sv = UIScrollView()
         sv.showsHorizontalScrollIndicator = false
@@ -160,6 +163,7 @@ final class HistoryMultiItemCell: HistoryBaseCell {
         currentURLs = []
         metaLabel.text = nil
         onItemTap = nil
+        moreButton.menu = nil
     }
 
     // MARK: - Tap (photos only — DocumentCardView handles its own tap)
@@ -179,6 +183,8 @@ final class HistoryMultiItemCell: HistoryBaseCell {
         contentView.insertSubview(leftGradient,  aboveSubview: scrollView)
         contentView.insertSubview(rightGradient, aboveSubview: leftGradient)
         contentContainer.addSubview(metaLabel)
+        // Floats above the strip and its edge gradients.
+        contentView.addSubview(moreButton)
 
         let gw = Self.edgeGradientWidth
         NSLayoutConstraint.activate([
@@ -207,6 +213,10 @@ final class HistoryMultiItemCell: HistoryBaseCell {
             metaLabel.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
             metaLabel.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
             metaLabel.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor, constant: -10),
+
+            // Cell's bottom-right corner, under the badge/time column.
+            moreButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            moreButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12),
         ])
 
         leftGradient.updateColors(for: traitCollection)

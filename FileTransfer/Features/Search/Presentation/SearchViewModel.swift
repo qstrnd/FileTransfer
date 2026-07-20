@@ -4,6 +4,7 @@ import Observation
 import OSLog
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 private let log = Logger(subsystem: "com.qstrnd.FileTransfer", category: "Search")
 
@@ -371,6 +372,33 @@ final class SearchViewModel {
     func abortFileTransfer() {
         sendFileUseCase.abort()
         disconnectAll()
+    }
+
+    /// Re-sends the attachments of a history record to the currently connected
+    /// devices (the ⋯ menu's "Send to Selected Devices"). Photos go through the
+    /// media path, everything else through the file path.
+    func resendFromHistory(_ record: TransferRecord) {
+        guard !connectedPeers.isEmpty else {
+            toastCenter.show(
+                id: "resendNoPeers", duration: 3,
+                content: AnyView(WarningToastCapsule(text: "Select a device to share with first"))
+            )
+            return
+        }
+        let urls = record.attachmentURLs
+        guard !urls.isEmpty else { return }
+        if record.type == .photo {
+            sendMedia(urls.map {
+                MediaItem(fileURL: $0, isVideo: Self.isVideo($0), livePhotoVideoURL: nil,
+                          fileName: $0.deletingPathExtension().lastPathComponent)
+            })
+        } else {
+            sendFiles(urls)
+        }
+    }
+
+    private static func isVideo(_ url: URL) -> Bool {
+        UTType(filenameExtension: url.pathExtension)?.conforms(to: .movie) ?? false
     }
 
     // MARK: - Pasteboard sharing

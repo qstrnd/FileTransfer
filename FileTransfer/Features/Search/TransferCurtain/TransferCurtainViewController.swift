@@ -93,6 +93,8 @@ final class TransferCurtainViewController: UIViewController {
 
     var thumbnailGate: (any HistoryThumbnailGate)?
     var onDeleteRecord: ((UUID) -> Void)?
+    /// Re-send a history record's attachments to the currently selected devices.
+    var onSendToDevices: ((TransferRecord) -> Void)?
     var currentPreviewURLs: [URL] = []
 
     /// True when the pasteboard has shareable content; combined with the

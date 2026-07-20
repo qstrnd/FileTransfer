@@ -13,6 +13,9 @@ final class HistoryDocumentCell: HistoryBaseCell {
         return l
     }()
 
+    /// ⋯ overflow button floating over the document card's bottom-right corner.
+    let moreButton = HistoryMoreButton()
+
     // MARK: - Init
 
     override init(frame: CGRect) {
@@ -44,6 +47,7 @@ final class HistoryDocumentCell: HistoryBaseCell {
         cardView?.cancelLoad()
         currentURL = nil
         metaLabel.text = nil
+        moreButton.menu = nil
     }
 
     // MARK: - Layout
@@ -58,6 +62,8 @@ final class HistoryDocumentCell: HistoryBaseCell {
 
         contentContainer.addSubview(card)
         contentContainer.addSubview(metaLabel)
+        // Pinned to the cell (not the card), at its bottom-right corner.
+        contentView.addSubview(moreButton)
 
         NSLayoutConstraint.activate([
             card.topAnchor.constraint(equalTo: contentContainer.topAnchor, constant: 4),
@@ -69,6 +75,9 @@ final class HistoryDocumentCell: HistoryBaseCell {
             metaLabel.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
             metaLabel.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
             metaLabel.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor, constant: -10),
+
+            moreButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            moreButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12),
         ])
     }
 

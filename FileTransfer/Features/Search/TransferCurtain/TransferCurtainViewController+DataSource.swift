@@ -50,11 +50,13 @@ extension TransferCurtainViewController {
         let imageReg = UICollectionView.CellRegistration<HistoryMediaCell, UUID> { [weak self] cell, _, id in
             guard let self, let record = recordsByID[id] else { return }
             cell.configure(with: record, gate: thumbnailGate ?? HistoryThumbnailService())
+            attachMoreMenu(to: cell.moreButton, for: record)
         }
 
         let multiReg = UICollectionView.CellRegistration<HistoryMultiItemCell, UUID> { [weak self] cell, _, id in
             guard let self, let record = recordsByID[id] else { return }
             cell.configure(with: record, gate: thumbnailGate ?? HistoryThumbnailService())
+            attachMoreMenu(to: cell.moreButton, for: record)
             cell.onItemTap = { [weak self] index in
                 guard let self else { return }
                 currentPreviewURLs = record.attachmentURLs
@@ -68,6 +70,7 @@ extension TransferCurtainViewController {
         let docReg = UICollectionView.CellRegistration<HistoryDocumentCell, UUID> { [weak self] cell, _, id in
             guard let self, let record = recordsByID[id] else { return }
             cell.configure(with: record, gate: thumbnailGate ?? HistoryThumbnailService())
+            attachMoreMenu(to: cell.moreButton, for: record)
         }
 
         // Section header registration
@@ -181,6 +184,42 @@ extension TransferCurtainViewController {
             layout.configuration = layoutConfig
         }
         return layout
+    }
+
+    // MARK: - More menu
+
+    /// Builds and attaches the ⋯ overflow menu for a media/document history row.
+    func attachMoreMenu(to button: HistoryMoreButton, for record: TransferRecord) {
+        let urls = record.attachmentURLs
+        let share = UIAction(title: "Share", image: UIImage(systemName: "square.and.arrow.up")) { [weak self, weak button] _ in
+            guard let self, let button else { return }
+            shareAttachments(urls, from: button)
+        }
+        let send = UIAction(title: "Send to Selected Devices", image: UIImage(systemName: "paperplane")) { [weak self] _ in
+            self?.onSendToDevices?(record)
+        }
+        let previewAll = UIAction(title: "Preview All", image: UIImage(systemName: "eye")) { [weak self] _ in
+            self?.previewAll(urls)
+        }
+        button.menu = UIMenu(children: [share, send, previewAll])
+        button.showsMenuAsPrimaryAction = true
+    }
+
+    private func shareAttachments(_ urls: [URL], from sourceView: UIView) {
+        guard !urls.isEmpty else { return }
+        let activity = UIActivityViewController(activityItems: urls, applicationActivities: nil)
+        // Anchor the popover to the tapped button on iPad.
+        activity.popoverPresentationController?.sourceView = sourceView
+        activity.popoverPresentationController?.sourceRect = sourceView.bounds
+        present(activity, animated: true)
+    }
+
+    private func previewAll(_ urls: [URL]) {
+        guard !urls.isEmpty else { return }
+        currentPreviewURLs = urls
+        let ql = QLPreviewController()
+        ql.dataSource = self
+        present(ql, animated: true)
     }
 
     // MARK: - Section grouping

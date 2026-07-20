@@ -42,5 +42,6 @@ struct TransferCurtainView: UIViewControllerRepresentable {
         uiViewController.onClearSelection = { viewModel.disconnectAll() }
         uiViewController.thumbnailGate   = viewModel.historyThumbnailGate
         uiViewController.onDeleteRecord  = { viewModel.deleteHistoryRecord($0) }
+        uiViewController.onSendToDevices = { viewModel.resendFromHistory($0) }
     }
 }
