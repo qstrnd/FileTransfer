@@ -205,10 +205,13 @@ extension TransferCurtainViewController {
             }
             completion([action])
         }
-        let previewAll = UIAction(title: "Preview All", image: UIImage(systemName: "eye")) { [weak self] _ in
+        // QuickLook shows all items with a tappable grid/list and swipe navigation
+        // when there's more than one; a single item just opens directly.
+        let viewTitle = urls.count > 1 ? "View All Items" : "View"
+        let view = UIAction(title: viewTitle, image: UIImage(systemName: "eye")) { [weak self] _ in
             self?.previewAll(urls)
         }
-        button.menu = UIMenu(children: [share, send, previewAll])
+        button.menu = UIMenu(children: [share, send, view])
         button.showsMenuAsPrimaryAction = true
     }
 
