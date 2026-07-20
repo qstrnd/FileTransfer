@@ -36,6 +36,17 @@ class HistoryBaseCell: UICollectionViewCell {
         return l
     }()
 
+    /// ⋯ overflow button at the cell's bottom-right corner. Owned and positioned
+    /// here so its placement is defined once; individual cells opt in by
+    /// overriding `shouldDisplayMoreButton()`. The data source attaches its menu.
+    /// (Named `overflowButton` to avoid colliding with `HistoryTextCell`'s own
+    /// "more" text-expand button.)
+    let overflowButton = HistoryMoreButton()
+
+    /// Whether this cell shows the ⋯ more-button. Off by default; media/document
+    /// cells override to return `true`.
+    func shouldDisplayMoreButton() -> Bool { false }
+
     // MARK: - Content area for subclasses
 
     /// Sits between the avatar cluster and the right badge column.
@@ -78,6 +89,7 @@ class HistoryBaseCell: UICollectionViewCell {
         super.prepareForReuse()
         avatarContainer.reset()
         timeLabel.text = nil
+        overflowButton.menu = nil
     }
 
     // MARK: - Base layout
@@ -97,6 +109,9 @@ class HistoryBaseCell: UICollectionViewCell {
 
         contentView.addSubview(avatarContainer)
         contentView.addSubview(rightColumn)
+        // Added last so it draws above the content; hidden unless the subclass opts in.
+        contentView.addSubview(overflowButton)
+        overflowButton.isHidden = !shouldDisplayMoreButton()
 
         NSLayoutConstraint.activate([
             // Avatar cluster: 44×44, top-left
@@ -136,6 +151,10 @@ class HistoryBaseCell: UICollectionViewCell {
             separator.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
             separator.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
             separator.heightAnchor.constraint(equalToConstant: 0.5),
+
+            // Overflow button: cell's bottom-right corner.
+            overflowButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
+            overflowButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12),
         ])
 
         // Ensure the cell is always tall enough to show the full avatar cluster.

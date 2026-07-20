@@ -50,13 +50,13 @@ extension TransferCurtainViewController {
         let imageReg = UICollectionView.CellRegistration<HistoryMediaCell, UUID> { [weak self] cell, _, id in
             guard let self, let record = recordsByID[id] else { return }
             cell.configure(with: record, gate: thumbnailGate ?? HistoryThumbnailService())
-            attachMoreMenu(to: cell.moreButton, for: record)
+            attachMoreMenu(to: cell.overflowButton, for: record)
         }
 
         let multiReg = UICollectionView.CellRegistration<HistoryMultiItemCell, UUID> { [weak self] cell, _, id in
             guard let self, let record = recordsByID[id] else { return }
             cell.configure(with: record, gate: thumbnailGate ?? HistoryThumbnailService())
-            attachMoreMenu(to: cell.moreButton, for: record)
+            attachMoreMenu(to: cell.overflowButton, for: record)
             cell.onItemTap = { [weak self] index in
                 guard let self else { return }
                 currentPreviewURLs = record.attachmentURLs
@@ -70,7 +70,7 @@ extension TransferCurtainViewController {
         let docReg = UICollectionView.CellRegistration<HistoryDocumentCell, UUID> { [weak self] cell, _, id in
             guard let self, let record = recordsByID[id] else { return }
             cell.configure(with: record, gate: thumbnailGate ?? HistoryThumbnailService())
-            attachMoreMenu(to: cell.moreButton, for: record)
+            attachMoreMenu(to: cell.overflowButton, for: record)
         }
 
         // Section header registration

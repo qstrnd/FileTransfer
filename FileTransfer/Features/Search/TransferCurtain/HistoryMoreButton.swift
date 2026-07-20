@@ -15,14 +15,14 @@ final class HistoryMoreButton: UIButton {
         super.init(frame: frame)
         translatesAutoresizingMaskIntoConstraints = false
 
-        backgroundColor = .systemBlue
+        backgroundColor = .systemFill
         layer.cornerRadius = Self.diameter / 2
         clipsToBounds = true
 
         // Dynamic colours adapt to light/dark on their own (UIColor, not CGColor).
         let config = UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
         setImage(UIImage(systemName: "ellipsis", withConfiguration: config), for: .normal)
-        tintColor = .transferCurtainBackground
+        tintColor = .systemBlue
 
         NSLayoutConstraint.activate([
             widthAnchor.constraint(equalToConstant: Self.diameter),

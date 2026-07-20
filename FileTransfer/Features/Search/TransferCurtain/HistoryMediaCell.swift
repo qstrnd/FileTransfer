@@ -25,9 +25,6 @@ final class HistoryMediaCell: HistoryBaseCell {
         return l
     }()
 
-    /// ⋯ overflow button floating over the thumbnail's bottom-right corner.
-    let moreButton = HistoryMoreButton()
-
     // MARK: - Init
 
     override init(frame: CGRect) {
@@ -36,6 +33,8 @@ final class HistoryMediaCell: HistoryBaseCell {
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    override func shouldDisplayMoreButton() -> Bool { true }
 
     // MARK: - Highlight
 
@@ -80,7 +79,6 @@ final class HistoryMediaCell: HistoryBaseCell {
         thumbnailView.image = nil
         metaLabel.text = nil
         thumbnailGate = nil
-        moreButton.menu = nil
     }
 
     // MARK: - Private
@@ -88,8 +86,6 @@ final class HistoryMediaCell: HistoryBaseCell {
     private func setupContent() {
         contentContainer.addSubview(thumbnailView)
         contentContainer.addSubview(metaLabel)
-        // Pinned to the cell (not the image), at its bottom-right corner.
-        contentView.addSubview(moreButton)
 
         NSLayoutConstraint.activate([
             thumbnailView.topAnchor.constraint(equalTo: contentContainer.topAnchor, constant: 4),
@@ -101,9 +97,6 @@ final class HistoryMediaCell: HistoryBaseCell {
             metaLabel.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
             metaLabel.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
             metaLabel.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor, constant: -10),
-
-            moreButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16),
-            moreButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -12),
         ])
     }
 
