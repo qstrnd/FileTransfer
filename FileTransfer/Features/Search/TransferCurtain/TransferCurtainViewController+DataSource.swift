@@ -195,8 +195,15 @@ extension TransferCurtainViewController {
             guard let self, let button else { return }
             shareAttachments(urls, from: button)
         }
-        let send = UIAction(title: "Send to Selected Devices", image: UIImage(systemName: "paperplane")) { [weak self] _ in
-            self?.onSendToDevices?(record)
+        // Re-evaluated each time the menu opens so the label reflects the current
+        // connection count — and is omitted entirely when nothing is connected.
+        let send = UIDeferredMenuElement.uncached { [weak self] completion in
+            guard let self, selectedCount > 0 else { completion([]); return }
+            let title = selectedCount == 1 ? "Send to 1 device" : "Send to \(selectedCount) devices"
+            let action = UIAction(title: title, image: UIImage(systemName: "paperplane")) { [weak self] _ in
+                self?.onSendToDevices?(record)
+            }
+            completion([action])
         }
         let previewAll = UIAction(title: "Preview All", image: UIImage(systemName: "eye")) { [weak self] _ in
             self?.previewAll(urls)
