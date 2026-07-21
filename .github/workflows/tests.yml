@@ -1,0 +1,70 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    runs-on: macos-26
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select simulator
+        id: simulator
+        run: |
+          set -euo pipefail
+
+          runtime=$(xcrun simctl list runtimes | grep '^iOS ' | sort -t' ' -k2 -V | tail -1 | sed -E 's/.* - //')
+          if [ -z "$runtime" ]; then
+            echo "No iOS simulator runtime installed; downloading one."
+            xcodebuild -downloadPlatform iOS
+            runtime=$(xcrun simctl list runtimes | grep '^iOS ' | sort -t' ' -k2 -V | tail -1 | sed -E 's/.* - //')
+          fi
+          if [ -z "$runtime" ]; then
+            echo "::error::No iOS simulator runtime available on this runner."
+            xcrun simctl list runtimes
+            exit 1
+          fi
+
+          devicetype=$(xcrun simctl list devicetypes | grep -m1 'iPhone' | sed -E 's/.*\((com\.apple\.CoreSimulator\.SimDeviceType\.[^)]+)\).*/\1/')
+          if [ -z "$devicetype" ]; then
+            echo "::error::No iPhone device type available on this runner."
+            xcrun simctl list devicetypes
+            exit 1
+          fi
+
+          echo "Using runtime: $runtime"
+          echo "Using device type: $devicetype"
+
+          udid=$(xcrun simctl create "CI iPhone" "$devicetype" "$runtime")
+          echo "id=$udid" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure xcbeautify
+        run: command -v xcbeautify || brew install xcbeautify
+
+      - name: Run unit tests
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project FileTransfer.xcodeproj \
+            -scheme FileTransfer \
+            -destination 'id=${{ steps.simulator.outputs.id }}' \
+            -only-testing:FileTransferTests \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcbeautify --renderer github-actions
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-results
+          path: ~/Library/Developer/Xcode/DerivedData/**/Logs/Test/*.xcresult
