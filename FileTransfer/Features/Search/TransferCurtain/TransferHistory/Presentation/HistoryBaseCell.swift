@@ -8,7 +8,7 @@ class HistoryBaseCell: UICollectionViewCell {
     // MARK: - Header views (rendered above content in Z-order)
 
     /// 44×44 cluster of overlapping peer-emoji circles.
-    let avatarContainer = PeerBubbleClusterView()
+    let avatarContainer = HistoryPeerBubbleClusterView()
 
     let statusBadge: HistoryStatusBadge = {
         let b = HistoryStatusBadge()

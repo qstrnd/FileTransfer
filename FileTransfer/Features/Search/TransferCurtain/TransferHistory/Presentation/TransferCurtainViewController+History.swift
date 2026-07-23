@@ -163,8 +163,7 @@ extension TransferCurtainViewController {
             guard let self,
                   let id = dataSource?.itemIdentifier(for: indexPath) else { return nil }
             let action = UIContextualAction(style: .destructive, title: "Delete") { [weak self] _, _, completion in
-                self?.onDeleteRecord?(id)
-                completion(true)
+                self?.confirmDelete(id: id, completion: completion)
             }
             action.image = UIImage(systemName: "trash")
             return UISwipeActionsConfiguration(actions: [action])
@@ -230,6 +229,26 @@ extension TransferCurtainViewController {
         let ql = QLPreviewController()
         ql.dataSource = self
         present(ql, animated: true)
+    }
+
+    /// Confirms before deleting a history record — swiping to delete is easy
+    /// to trigger by accident, and the action is permanent.
+    /// `completion` is the swipe action's own completion handler: `true`
+    /// finishes the delete animation, `false` restores the swiped row.
+    private func confirmDelete(id: UUID, completion: @escaping (Bool) -> Void) {
+        let alert = UIAlertController(
+            title: "Delete Transfer?",
+            message: "This removes it from your history and can't be undone.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in
+            completion(false)
+        })
+        alert.addAction(UIAlertAction(title: "Delete", style: .destructive) { [weak self] _ in
+            self?.onDeleteRecord?(id)
+            completion(true)
+        })
+        present(alert, animated: true)
     }
 
     // MARK: - Section grouping

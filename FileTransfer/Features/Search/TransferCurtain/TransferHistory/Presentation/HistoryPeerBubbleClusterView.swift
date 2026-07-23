@@ -2,12 +2,12 @@ import UIKit
 
 /// 44×44 cluster of 1–3 overlapping peer-emoji circles (or a "+N" count
 /// circle beyond that), used as the avatar column in `HistoryBaseCell` rows.
-final class PeerBubbleClusterView: UIView {
+final class HistoryPeerBubbleClusterView: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         translatesAutoresizingMaskIntoConstraints = false
-        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { [weak self] (_: PeerBubbleClusterView, _: UITraitCollection) in
+        registerForTraitChanges([UITraitUserInterfaceStyle.self]) { [weak self] (_: HistoryPeerBubbleClusterView, _: UITraitCollection) in
             self?.refreshBorderColors()
         }
         NotificationCenter.default.addObserver(self,
