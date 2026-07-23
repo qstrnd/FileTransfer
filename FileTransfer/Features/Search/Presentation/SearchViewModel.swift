@@ -83,6 +83,7 @@ final class SearchViewModel {
     private let sendFileUseCase: SendFileUseCase
     let fileSaveService = FileSaveService()
     private let toastCenter: any ToastPresenting
+    private let haptics: any HapticsGate
 
     /// Tracks peers we invited with isReconnect=true so peerConnected can show the toast.
     private var reconnectingPeers: Set<Peer.ID> = []
@@ -129,6 +130,7 @@ final class SearchViewModel {
         thumbnailGate: any ThumbnailGate = MediaThumbnailService(),
         historyThumbnailGate: any HistoryThumbnailGate = HistoryThumbnailService(),
         toastCenter: any ToastPresenting = ToastCenter.shared,
+        haptics: any HapticsGate = HapticFeedbackService.shared,
         settingsDefaults: UserDefaults = .standard,
         onBack: @escaping () -> Void
     ) {
@@ -145,13 +147,14 @@ final class SearchViewModel {
         self.thumbnailGate = thumbnailGate
         self.historyThumbnailGate = historyThumbnailGate
         self.toastCenter = toastCenter
+        self.haptics = haptics
         self.onBack = onBack
         self.sendMediaUseCase = SendMediaUseCase(
-            session: service, history: historyStore, attachmentCache: attachmentCache
+            session: service, history: historyStore, attachmentCache: attachmentCache, haptics: haptics
         )
         self.sendContactUseCase = SendContactUseCase(session: service, history: historyStore)
         self.sendFileUseCase = SendFileUseCase(
-            session: service, history: historyStore, attachmentCache: attachmentCache
+            session: service, history: historyStore, attachmentCache: attachmentCache, haptics: haptics
         )
         // Owns the retention setting and the launch-time / on-change history clean.
         self.settings = SettingsMenuViewModel(
@@ -347,6 +350,7 @@ final class SearchViewModel {
     // MARK: - Actions
 
     func connect(to peer: Peer) {
+        haptics.light()
         initiateConnect(to: peer, isReconnect: false)
     }
 
@@ -372,6 +376,7 @@ final class SearchViewModel {
             try? await Task.sleep(for: .seconds(mcInvitationTimeout + 3))
             if peerStates[peer] == .connecting {
                 log.warning("connect — failsafe fired for \(peer.displayName, privacy: .public); resetting to idle")
+                haptics.heavy()
                 withAnimation(.spring(duration: 0.4)) { peerStates[peer] = .idle }
                 reconnectingPeers.remove(peer.id)
             }
@@ -429,6 +434,7 @@ final class SearchViewModel {
     /// media path, everything else through the file path.
     func resendFromHistory(_ record: TransferRecord) {
         guard !connectedPeers.isEmpty else {
+            haptics.warning()
             toastCenter.show(
                 id: "resendNoPeers", duration: 3,
                 content: AnyView(WarningToastCapsule(text: "Select a device to share with first"))
@@ -457,6 +463,7 @@ final class SearchViewModel {
     /// here is what surfaces the system paste banner — done only on explicit tap.
     func beginPasteboardShare() {
         guard let content = PasteboardShareImporter.read() else {
+            haptics.warning()
             toastCenter.show(
                 id: "pasteboardEmpty", duration: 3,
                 content: AnyView(WarningToastCapsule(text: "Nothing on the pasteboard to share"))
@@ -537,6 +544,7 @@ final class SearchViewModel {
                 // may be backgrounded/suspended while its upload continues) —
                 // policing resumes once the transfer is done.
                 log.warning("keepalive — no pong from \(peer.displayName, privacy: .public), disconnecting")
+                haptics.heavy()
                 service.disconnect(from: peer)
             } else {
                 service.sendPing(to: peer)
@@ -590,6 +598,7 @@ final class SearchViewModel {
             log.warning("disconnect — invalid from state \(String(describing: current), privacy: .public)")
             return
         }
+        haptics.light()
         manuallyDisconnectedPeers.insert(peer.id)
         withAnimation(.spring(duration: 0.4)) { peerStates[peer] = next }
         log.debug("disconnect — state \(String(describing: current), privacy: .public) → \(String(describing: next), privacy: .public)")
@@ -599,6 +608,7 @@ final class SearchViewModel {
     func acceptInvitation() {
         log.info("acceptInvitation — from=\(self.pendingInvitationFrom?.displayName ?? "nil", privacy: .public)")
         guard let peer = pendingInvitationFrom else { return }
+        haptics.light()
         // The receiving side never went through .connecting (they didn't initiate),
         // so the state machine doesn't apply here — set .connected directly.
         withAnimation { peerStates[peer] = .connected }
@@ -608,6 +618,7 @@ final class SearchViewModel {
 
     func declineInvitation() {
         log.info("declineInvitation — from=\(self.pendingInvitationFrom?.displayName ?? "nil", privacy: .public)")
+        haptics.light()
         service.declineInvitation()
         pendingInvitationFrom = nil
     }
@@ -688,11 +699,13 @@ extension SearchViewModel: PeerSessionEvents {
 
         if preState == .connected {
             // Receiving side already set .connected in acceptInvitation.
+            haptics.success()
             connectionHistory.record(peer: peer)
             log.debug("didConnect — already connected (receiving side), history updated")
             return
         }
         guard let next = preState!.applying(.connectionAccepted) else { return }
+        haptics.success()
         withAnimation { peerStates[peer] = next }
         connectionHistory.record(peer: peer)
         log.debug("didConnect — state → \(String(describing: next), privacy: .public); history updated")
@@ -730,6 +743,13 @@ extension SearchViewModel: PeerSessionEvents {
         }
         withAnimation { peerStates[peer] = next }
         log.debug("didDisconnect — state → \(String(describing: next), privacy: .public)")
+
+        // Remote-initiated disconnect from an established connection, or a
+        // connection attempt that got declined — both are connection errors
+        // from the user's perspective.
+        if current == .connected || next == .rejected {
+            haptics.heavy()
+        }
 
         // Remote-initiated disconnect from an established connection.
         // When WE initiate, disconnect(from:) updates peerStates[peer] to a
@@ -769,6 +789,7 @@ extension SearchViewModel: PeerSessionEvents {
             return
         }
         pendingInvitationFrom = peer
+        haptics.warning()
 
         // Auto-dismiss the alert after the MPC invitation timeout so the alert
         // does not linger forever. Show a brief banner so the user knows why it disappeared.
@@ -834,6 +855,7 @@ extension SearchViewModel: PeerSessionEvents {
 
     func messageReceived(_ message: TransferMessage) {
         log.debug("didReceive — from \(message.senderName, privacy: .public): \(message.text, privacy: .private)")
+        haptics.success()
         receivedMessage = message
         let (emoji, name) = Peer.parseDisplayName(message.senderName)
         addRecord(TransferRecord(
@@ -874,6 +896,7 @@ extension SearchViewModel: PeerSessionEvents {
             contacts: contactInfos
         )
         addRecord(record)
+        haptics.success()
 
         receivedContact = ReceivedContactTransfer(
             senderName: peer.displayName,
@@ -917,6 +940,7 @@ extension SearchViewModel: PeerSessionEvents {
             try? await Task.sleep(for: .seconds(1.2))
             receivingMediaTransfer = nil
             flushPendingDisconnects()
+            haptics.success()
             receivedMedia = ReceivedMediaTransfer(senderName: senderName, items: items, recordID: recordID)
             addRecord(TransferRecord(
                 id: recordID,
@@ -969,6 +993,7 @@ extension SearchViewModel: PeerSessionEvents {
             try? await Task.sleep(for: .seconds(1.2))
             receivingFileTransfer = nil
             flushPendingDisconnects()
+            haptics.success()
             receivedFiles = ReceivedFileTransfer(senderName: senderName, files: files, recordID: recordID)
             addRecord(TransferRecord(
                 id: recordID,

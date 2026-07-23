@@ -13,17 +13,20 @@ final class SendFileUseCase {
     private let session: any NearbySessionService
     private let history: any TransferHistoryGate
     private let attachmentCache: any AttachmentCacheGate
+    private let haptics: any HapticsGate
     private var progressPollingTask: Task<Void, Never>?
     private var activeProgresses: [Progress] = []
 
     init(
         session: any NearbySessionService,
         history: any TransferHistoryGate,
-        attachmentCache: any AttachmentCacheGate
+        attachmentCache: any AttachmentCacheGate,
+        haptics: any HapticsGate
     ) {
         self.session = session
         self.history = history
         self.attachmentCache = attachmentCache
+        self.haptics = haptics
     }
 
     func send(_ urls: [URL], to peers: [Peer]) {
@@ -51,6 +54,7 @@ final class SendFileUseCase {
                     self?.outgoingTransfer?.recordCompletion()
                 case .failure(let error):
                     log.error("sendFiles item failed: \(error.localizedDescription, privacy: .public)")
+                    self?.haptics.heavy()
                     self?.outgoingTransfer?.recordFailure()
                 }
                 if self?.outgoingTransfer?.isComplete == true {

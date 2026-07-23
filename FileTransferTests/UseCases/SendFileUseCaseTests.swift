@@ -43,6 +43,15 @@ private final class SpyAttachmentCache: AttachmentCacheGate, @unchecked Sendable
     func delete(recordID id: UUID) {}
 }
 
+@MainActor
+private final class SpyHapticsGate: HapticsGate {
+    private(set) var heavyCallCount = 0
+    func light() {}
+    func heavy() { heavyCallCount += 1 }
+    func success() {}
+    func warning() {}
+}
+
 // MARK: - Tests
 
 @MainActor
@@ -54,7 +63,7 @@ struct SendFileUseCaseTests {
         let service = SpyNearbySessionService()
         let history = SpyHistoryGate()
         let cache = SpyAttachmentCache()
-        let useCase = SendFileUseCase(session: service, history: history, attachmentCache: cache)
+        let useCase = SendFileUseCase(session: service, history: history, attachmentCache: cache, haptics: SpyHapticsGate())
         return (useCase, service, history, cache)
     }
 

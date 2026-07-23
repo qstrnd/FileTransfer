@@ -149,6 +149,13 @@ private enum PreviewSupport {
         func stop() {}
     }
 
+    private final class PreviewHapticsGate: HapticsGate {
+        func light() {}
+        func heavy() {}
+        func success() {}
+        func warning() {}
+    }
+
     static func heroPreviewVM() -> SearchViewModel {
         SearchViewModel(
             emoji: "🐟", name: "Fantastic Fish", deviceID: UUID(),
@@ -157,6 +164,7 @@ private enum PreviewSupport {
             networkPathMonitor: PreviewNetworkPathMonitor(),
             connectionHistory: InMemoryConnectionHistoryStore(),
             historyStore: .preview,
+            haptics: PreviewHapticsGate(),
             onBack: {}
         )
     }

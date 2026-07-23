@@ -57,6 +57,18 @@ private final class SpyToastCenter: ToastPresenting {
     func hide(id: AnyHashable?) { hiddenIDs.append(id) }
 }
 
+@MainActor
+private final class SpyHapticsGate: HapticsGate {
+    private(set) var lightCallCount = 0
+    private(set) var heavyCallCount = 0
+    private(set) var successCallCount = 0
+    private(set) var warningCallCount = 0
+    func light() { lightCallCount += 1 }
+    func heavy() { heavyCallCount += 1 }
+    func success() { successCallCount += 1 }
+    func warning() { warningCallCount += 1 }
+}
+
 // MARK: - Tests
 
 @MainActor
@@ -82,6 +94,7 @@ struct SearchViewModelTests {
             networkPathMonitor: SpyNetworkPathMonitor(),
             connectionHistory: history,
             historyStore: .preview,
+            haptics: SpyHapticsGate(),
             settingsDefaults: isolatedDefaults(),
             onBack: {}
         )
@@ -102,6 +115,7 @@ struct SearchViewModelTests {
             connectionHistory: history,
             historyStore: .preview,
             toastCenter: toastCenter,
+            haptics: SpyHapticsGate(),
             settingsDefaults: isolatedDefaults(),
             onBack: {}
         )

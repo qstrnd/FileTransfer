@@ -55,7 +55,10 @@ struct SearchView: View {
             content: ReceivedTextAlert(
                 message: viewModel.receivedMessage,
                 onDismiss: { viewModel.receivedMessage = nil },
-                onCopied: { ToastCenter.shared.show { CopiedToast() } }
+                onCopied: {
+                    HapticFeedbackService.shared.light()
+                    ToastCenter.shared.show { CopiedToast() }
+                }
             ),
             isVisible: viewModel.receivedMessage != nil,
             isInteractive: true,
@@ -238,6 +241,7 @@ struct SearchView: View {
     /// one selected (connected) device — otherwise it shows an error toast.
     private func handleDrop(_ providers: [NSItemProvider]) {
         guard !viewModel.connectedPeers.isEmpty else {
+            HapticFeedbackService.shared.warning()
             ToastCenter.shared.show(id: "dropNoPeers", duration: 3) {
                 WarningToastCapsule(text: "Select a device to share with first")
             }
@@ -358,15 +362,21 @@ struct SearchView: View {
         }
     }
 
+    /// Wraps a share-button action with a light tap haptic — every curtain
+    /// button (text/photo/file/contact/pasteboard) routes through this.
+    private func tapShare(_ action: @escaping () -> Void) -> () -> Void {
+        { HapticFeedbackService.shared.light(); action() }
+    }
+
     private func portraitCurtainView(maxSheetWidth: CGFloat?) -> some View {
         TransferCurtainView(
             viewModel: viewModel,
             maxSheetWidth: maxSheetWidth,
-            onShareText:       { showTextShare = true },
-            onSharePhoto:      { showMediaPicker = true },
-            onShareFile:       { showFilePicker = true },
-            onShareContact:    { showContactPicker = true },
-            onSharePasteboard: { viewModel.beginPasteboardShare() }
+            onShareText:       tapShare { showTextShare = true },
+            onSharePhoto:      tapShare { showMediaPicker = true },
+            onShareFile:       tapShare { showFilePicker = true },
+            onShareContact:    tapShare { showContactPicker = true },
+            onSharePasteboard: tapShare { viewModel.beginPasteboardShare() }
         )
     }
 
@@ -376,11 +386,11 @@ struct SearchView: View {
         TransferCurtainView(
             viewModel: viewModel,
             disableScrim: true,
-            onShareText:       { showTextShare = true },
-            onSharePhoto:      { showMediaPicker = true },
-            onShareFile:       { showFilePicker = true },
-            onShareContact:    { showContactPicker = true },
-            onSharePasteboard: { viewModel.beginPasteboardShare() }
+            onShareText:       tapShare { showTextShare = true },
+            onSharePhoto:      tapShare { showMediaPicker = true },
+            onShareFile:       tapShare { showFilePicker = true },
+            onShareContact:    tapShare { showContactPicker = true },
+            onSharePasteboard: tapShare { viewModel.beginPasteboardShare() }
         )
     }
 }
@@ -414,6 +424,14 @@ private final class PreviewNetworkPathMonitor: NetworkPathMonitoring {
     func stop() {}
 }
 
+@MainActor
+private final class PreviewHapticsGate: HapticsGate {
+    func light() {}
+    func heavy() {}
+    func success() {}
+    func warning() {}
+}
+
 private func makePeer(_ name: String) -> Peer { Peer(displayName: name) }
 
 private func previewVM(
@@ -427,6 +445,7 @@ private func previewVM(
                              networkPathMonitor: PreviewNetworkPathMonitor(),
                              connectionHistory: InMemoryConnectionHistoryStore(),
                              historyStore: .preview,
+                             haptics: PreviewHapticsGate(),
                              onBack: {})
     vm.discoveredPeers = peers
     vm.peerStates = states
