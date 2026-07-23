@@ -343,6 +343,7 @@ final class SearchViewModel {
 
     func goBack() {
         log.info("goBack")
+        haptics.light()
         stop()
         onBack()
     }
@@ -477,6 +478,7 @@ final class SearchViewModel {
     func confirmPasteboardShare() {
         guard let content = pendingPasteboardShare else { return }
         pendingPasteboardShare = nil
+        haptics.light()
         switch content {
         case .text(let text):
             sendText(text)

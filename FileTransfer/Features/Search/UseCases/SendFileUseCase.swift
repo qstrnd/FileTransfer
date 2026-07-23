@@ -54,10 +54,17 @@ final class SendFileUseCase {
                     self?.outgoingTransfer?.recordCompletion()
                 case .failure(let error):
                     log.error("sendFiles item failed: \(error.localizedDescription, privacy: .public)")
-                    self?.haptics.heavy()
                     self?.outgoingTransfer?.recordFailure()
                 }
                 if self?.outgoingTransfer?.isComplete == true {
+                    // One outcome haptic for the whole batch (all items, all
+                    // peers) rather than per-item, so a multi-file send with
+                    // several failures doesn't buzz repeatedly.
+                    if self?.outgoingTransfer?.hasFailed == true {
+                        self?.haptics.heavy()
+                    } else {
+                        self?.haptics.success()
+                    }
                     Task { @MainActor [weak self] in
                         try? await Task.sleep(for: .seconds(1.5))
                         self?.outgoingTransfer = nil

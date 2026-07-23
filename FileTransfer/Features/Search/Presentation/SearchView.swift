@@ -152,6 +152,7 @@ struct SearchView: View {
         .sheet(isPresented: $showTextShare) {
             TextShareView(
                 onSend: { text in
+                    HapticFeedbackService.shared.light()
                     viewModel.sendText(text)
                     showTextShare = false
                 },
