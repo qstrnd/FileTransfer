@@ -7,17 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		AF17DEC0DE0000000000000C /* TransferWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AF17DEC0DE00000000000001 /* TransferWidget.appex */; platformFilters = (ios, ); settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		AF17DEC0DE0000000000000C /* TransferWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = AF17DEC0DE00000000000001 /* TransferWidget.appex */; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		DE71CE0000000000000003 /* DeviceKit in Frameworks */ = {isa = PBXBuildFile; productRef = DE71CE0000000000000002 /* DeviceKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		AF17DEC0DE0000000000000D /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = A1628F152FE9C5CA00A4A1D3 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = AF17DEC0DE00000000000004;
-			remoteInfo = TransferWidget;
-		};
 		A1628F2F2FE9C5CC00A4A1D3 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = A1628F152FE9C5CA00A4A1D3 /* Project object */;
@@ -31,6 +25,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = A1628F1C2FE9C5CA00A4A1D3;
 			remoteInfo = FileTransfer;
+		};
+		AF17DEC0DE0000000000000D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A1628F152FE9C5CA00A4A1D3 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AF17DEC0DE00000000000004;
+			remoteInfo = TransferWidget;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -49,10 +50,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		AF17DEC0DE00000000000001 /* TransferWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TransferWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1628F1D2FE9C5CA00A4A1D3 /* FileTransfer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FileTransfer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1628F2E2FE9C5CC00A4A1D3 /* FileTransferTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FileTransferTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1628F382FE9C5CC00A4A1D3 /* FileTransferUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FileTransferUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		AF17DEC0DE00000000000001 /* TransferWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TransferWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -111,6 +112,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DE71CE0000000000000003 /* DeviceKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -184,33 +186,11 @@
 			);
 			name = FileTransfer;
 			packageProductDependencies = (
+				DE71CE0000000000000002 /* DeviceKit */,
 			);
 			productName = FileTransfer;
 			productReference = A1628F1D2FE9C5CA00A4A1D3 /* FileTransfer.app */;
 			productType = "com.apple.product-type.application";
-		};
-		AF17DEC0DE00000000000004 /* TransferWidget */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = AF17DEC0DE00000000000008 /* Build configuration list for PBXNativeTarget "TransferWidget" */;
-			buildPhases = (
-				AF17DEC0DE00000000000005 /* Sources */,
-				AF17DEC0DE00000000000006 /* Frameworks */,
-				AF17DEC0DE00000000000007 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				AF17DEC0DE00000000000002 /* TransferWidget */,
-				AF17DEC0DE00000000000003 /* Shared */,
-			);
-			name = TransferWidget;
-			packageProductDependencies = (
-			);
-			productName = TransferWidget;
-			productReference = AF17DEC0DE00000000000001 /* TransferWidget.appex */;
-			productType = "com.apple.product-type.app-extension";
 		};
 		A1628F2D2FE9C5CC00A4A1D3 /* FileTransferTests */ = {
 			isa = PBXNativeTarget;
@@ -258,6 +238,29 @@
 			productReference = A1628F382FE9C5CC00A4A1D3 /* FileTransferUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		AF17DEC0DE00000000000004 /* TransferWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AF17DEC0DE00000000000008 /* Build configuration list for PBXNativeTarget "TransferWidget" */;
+			buildPhases = (
+				AF17DEC0DE00000000000005 /* Sources */,
+				AF17DEC0DE00000000000006 /* Frameworks */,
+				AF17DEC0DE00000000000007 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				AF17DEC0DE00000000000002 /* TransferWidget */,
+				AF17DEC0DE00000000000003 /* Shared */,
+			);
+			name = TransferWidget;
+			packageProductDependencies = (
+			);
+			productName = TransferWidget;
+			productReference = AF17DEC0DE00000000000001 /* TransferWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -290,6 +293,9 @@
 			);
 			mainGroup = A1628F142FE9C5CA00A4A1D3;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				DE71CE0000000000000001 /* XCRemoteSwiftPackageReference "DeviceKit" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A1628F1E2FE9C5CA00A4A1D3 /* Products */;
 			projectDirPath = "";
@@ -378,9 +384,7 @@
 		};
 		AF17DEC0DE0000000000000E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			platformFilters = (
-				ios,
-			);
+			platformFilter = ios;
 			target = AF17DEC0DE00000000000004 /* TransferWidget */;
 			targetProxy = AF17DEC0DE0000000000000D /* PBXContainerItemProxy */;
 		};
@@ -769,6 +773,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		DE71CE0000000000000001 /* XCRemoteSwiftPackageReference "DeviceKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/devicekit/DeviceKit.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		DE71CE0000000000000002 /* DeviceKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DE71CE0000000000000001 /* XCRemoteSwiftPackageReference "DeviceKit" */;
+			productName = DeviceKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A1628F152FE9C5CA00A4A1D3 /* Project object */;
 }
