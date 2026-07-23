@@ -29,6 +29,26 @@ private final class SpyNearbyService: NearbySessionService {
 }
 
 @MainActor
+private final class SpyLocalNetworkAccessGate: LocalNetworkAccessGate {
+    private(set) var checkCallCount = 0
+    var result = true
+    func check(timeout: TimeInterval, onResult: @escaping (Bool) -> Void) {
+        checkCallCount += 1
+        onResult(result)
+    }
+    func stop() {}
+}
+
+@MainActor
+private final class SpyNetworkPathMonitor: NetworkPathMonitoring {
+    var onChange: (() -> Void)?
+    private(set) var startCallCount = 0
+    private(set) var stopCallCount = 0
+    func start() { startCallCount += 1 }
+    func stop() { stopCallCount += 1 }
+}
+
+@MainActor
 private final class SpyToastCenter: ToastPresenting {
     private(set) var shownIDs: [AnyHashable] = []
     private(set) var hiddenIDs: [AnyHashable?] = []
@@ -58,6 +78,8 @@ struct SearchViewModelTests {
             emoji: "🐟", name: "Fish",
             deviceID: myDeviceID,
             service: service,
+            localNetworkAccessGate: SpyLocalNetworkAccessGate(),
+            networkPathMonitor: SpyNetworkPathMonitor(),
             connectionHistory: history,
             historyStore: .preview,
             settingsDefaults: isolatedDefaults(),
@@ -75,6 +97,8 @@ struct SearchViewModelTests {
             emoji: "🐟", name: "Fish",
             deviceID: myDeviceID,
             service: service,
+            localNetworkAccessGate: SpyLocalNetworkAccessGate(),
+            networkPathMonitor: SpyNetworkPathMonitor(),
             connectionHistory: history,
             historyStore: .preview,
             toastCenter: toastCenter,

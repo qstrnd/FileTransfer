@@ -57,8 +57,18 @@ final class SearchViewModel {
     var connectedPeers: [Peer] { peerStates.filter { $0.value == .connected }.map(\.key) }
     var hasConnectedPeers: Bool { !connectedPeers.isEmpty }
 
+    /// nil while the self-discovery probe is checking, true once it confirms
+    /// local network access, false if it couldn't within the timeout (Local
+    /// Network permission off, or no Wi-Fi — the probe can't tell which).
+    var localNetworkAccessConfirmed: Bool?
+    var isLocalNetworkUnconfirmed: Bool { localNetworkAccessConfirmed == false }
+    /// Guards `checkLocalNetworkAccess` against re-entry while a probe is in flight.
+    private var isCheckingLocalNetworkAccess = false
+
     private let deviceID: UUID
     private let service: any NearbySessionService
+    private let localNetworkAccessGate: any LocalNetworkAccessGate
+    private let networkPathMonitor: any NetworkPathMonitoring
     private let connectionHistory: any ConnectionHistoryStore
     private let historyStore: TransferHistoryStore
     private let attachmentCache: any AttachmentCacheGate
@@ -110,6 +120,8 @@ final class SearchViewModel {
         name: String,
         deviceID: UUID,
         service: any NearbySessionService,
+        localNetworkAccessGate: any LocalNetworkAccessGate = LocalNetworkAccessChecker(),
+        networkPathMonitor: any NetworkPathMonitoring = SystemNetworkPathMonitor(),
         connectionHistory: any ConnectionHistoryStore,
         historyStore: TransferHistoryStore,
         attachmentCache: any AttachmentCacheGate = TransferAttachmentCache(),
@@ -124,6 +136,8 @@ final class SearchViewModel {
         self.name = name
         self.deviceID = deviceID
         self.service = service
+        self.localNetworkAccessGate = localNetworkAccessGate
+        self.networkPathMonitor = networkPathMonitor
         self.connectionHistory = connectionHistory
         self.historyStore = historyStore
         self.attachmentCache = attachmentCache
@@ -144,6 +158,10 @@ final class SearchViewModel {
             historyStore: historyStore, attachmentCache: attachmentCache, defaults: settingsDefaults
         )
         sessionAdapter.events = self
+        // A path change (e.g. Airplane Mode toggled from Control Center, which
+        // never backgrounds the app) is a hint to recheck — not a verdict by
+        // itself, so this just re-runs the same probe `checkLocalNetworkAccess` does.
+        self.networkPathMonitor.onChange = { [weak self] in self?.checkLocalNetworkAccess() }
     }
 
     // MARK: - Lifecycle
@@ -158,14 +176,44 @@ final class SearchViewModel {
         service.delegate = sessionAdapter
         service.start(displayName: "\(emoji) \(name)", deviceID: deviceID)
         startKeepalive()
+        checkLocalNetworkAccess()
+        networkPathMonitor.start()
     }
 
     func stop() {
         log.info("stop")
         stopKeepalive()
         cancelBackgroundGrace()
+        localNetworkAccessGate.stop()
+        isCheckingLocalNetworkAccess = false
+        networkPathMonitor.stop()
         service.delegate = nil
         service.stop()
+    }
+
+    /// Probes local network access via self-discovery (see `LocalNetworkAccessGate`).
+    /// Triggered on launch, on returning to the foreground, and by
+    /// `networkPathMonitor` whenever the OS reports a real path change —
+    /// deliberately never on a fixed timer, since rechecking on a schedule
+    /// made the empty state flicker between "Searching..." and the notice
+    /// even when nothing had actually changed.
+    ///
+    /// Guarded against re-entry: `LocalNetworkAccessGate.check` restarts its
+    /// probe (and its own timeout) on every call, so if `networkPathMonitor`
+    /// fires again while a probe is still running — e.g. its initial delivery
+    /// racing the explicit call from `start()` — a naive recheck would keep
+    /// cancelling the timeout before it ever elapses, leaving
+    /// `localNetworkAccessConfirmed` stuck at nil (which reads as "still
+    /// searching", not "confirmed unreachable") forever. Letting the current
+    /// probe finish first guarantees it always gets its full window.
+    private func checkLocalNetworkAccess() {
+        guard !isCheckingLocalNetworkAccess else { return }
+        isCheckingLocalNetworkAccess = true
+        localNetworkAccessConfirmed = nil
+        localNetworkAccessGate.check(timeout: 4) { [weak self] confirmed in
+            self?.isCheckingLocalNetworkAccess = false
+            self?.localNetworkAccessConfirmed = confirmed
+        }
     }
 
     /// Called the moment the app enters the background.
@@ -259,6 +307,7 @@ final class SearchViewModel {
             log.info("handleForeground — within grace; resuming preserved connection")
             cancelBackgroundGrace()
             startKeepalive()
+            checkLocalNetworkAccess()
             return
         }
         log.info("handleForeground — resetting session")
@@ -286,6 +335,7 @@ final class SearchViewModel {
         }
         service.stop()
         service.start(displayName: "\(emoji) \(name)", deviceID: deviceID)
+        checkLocalNetworkAccess()
     }
 
     func goBack() {

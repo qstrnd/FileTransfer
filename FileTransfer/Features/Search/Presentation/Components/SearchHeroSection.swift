@@ -15,7 +15,7 @@ struct SearchHeroSection: View {
     var body: some View {
         VStack(spacing: nameStyle.spacing) {
             ZStack {
-                if !compact && showRings {
+                if !compact && showRings && !viewModel.isLocalNetworkUnconfirmed {
                     PulsingRings().transition(.opacity)
                 }
                 Button { viewModel.goBack() } label: {
@@ -138,10 +138,23 @@ private enum PreviewSupport {
         func declineInvitation() {}
     }
 
+    private final class PreviewLocalNetworkAccessGate: LocalNetworkAccessGate {
+        func check(timeout: TimeInterval, onResult: @escaping (Bool) -> Void) { onResult(true) }
+        func stop() {}
+    }
+
+    private final class PreviewNetworkPathMonitor: NetworkPathMonitoring {
+        var onChange: (() -> Void)?
+        func start() {}
+        func stop() {}
+    }
+
     static func heroPreviewVM() -> SearchViewModel {
         SearchViewModel(
             emoji: "🐟", name: "Fantastic Fish", deviceID: UUID(),
             service: PreviewNearbyService(),
+            localNetworkAccessGate: PreviewLocalNetworkAccessGate(),
+            networkPathMonitor: PreviewNetworkPathMonitor(),
             connectionHistory: InMemoryConnectionHistoryStore(),
             historyStore: .preview,
             onBack: {}

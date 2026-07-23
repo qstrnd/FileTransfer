@@ -261,6 +261,30 @@ struct SearchView: View {
 
     // MARK: - Layouts
 
+    /// Shown in place of the peer grid while no peers are discovered: the
+    /// shimmering "Searching..." text normally, or a static explainer with a
+    /// Settings shortcut when local network access can't be confirmed.
+    @ViewBuilder
+    private func emptyStateContent() -> some View {
+        if showText {
+            VStack {
+                Spacer()
+                Group {
+                    if viewModel.isLocalNetworkUnconfirmed {
+                        LocalNetworkAccessNotice()
+                    } else {
+                        SearchingText()
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 24)
+                Spacer()
+                Spacer()
+            }
+            .transition(.opacity)
+        }
+    }
+
     private func portraitLayout(maxSheetWidth: CGFloat?) -> some View {
         ZStack {
             Color(.systemGroupedBackground).ignoresSafeArea()
@@ -275,17 +299,7 @@ struct SearchView: View {
                 // keeping the hero circle at a stable position throughout.
                 ZStack {
                     if viewModel.discoveredPeers.isEmpty {
-                        if showText {
-                            VStack {
-                                Spacer()
-                                SearchingText()
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, 24)
-                                Spacer()
-                                Spacer()
-                            }
-                            .transition(.opacity)
-                        }
+                        emptyStateContent()
                     } else {
                         SearchPeerGrid(viewModel: viewModel)
                             .transition(.opacity)
@@ -312,17 +326,7 @@ struct SearchView: View {
             // Left column — same layout as portrait, no curtain-clearance bottom inset.
             ZStack {
                 if viewModel.discoveredPeers.isEmpty {
-                    if showText {
-                        VStack {
-                            Spacer()
-                            SearchingText()
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 24)
-                            Spacer()
-                            Spacer()
-                        }
-                        .transition(.opacity)
-                    }
+                    emptyStateContent()
                 } else {
                     SearchPeerGrid(viewModel: viewModel, bottomInset: 40)
                         .transition(.opacity)
@@ -396,11 +400,31 @@ private final class PreviewNearbyService: NearbySessionService {
     func declineInvitation() {}
 }
 
+@MainActor
+private final class PreviewLocalNetworkAccessGate: LocalNetworkAccessGate {
+    var result = true
+    func check(timeout: TimeInterval, onResult: @escaping (Bool) -> Void) { onResult(result) }
+    func stop() {}
+}
+
+@MainActor
+private final class PreviewNetworkPathMonitor: NetworkPathMonitoring {
+    var onChange: (() -> Void)?
+    func start() {}
+    func stop() {}
+}
+
 private func makePeer(_ name: String) -> Peer { Peer(displayName: name) }
 
-private func previewVM(peers: [Peer], states: [Peer: PeerConnectionState] = [:]) -> SearchViewModel {
+private func previewVM(
+    peers: [Peer], states: [Peer: PeerConnectionState] = [:], localNetworkAccessConfirmed: Bool = true
+) -> SearchViewModel {
+    let gate = PreviewLocalNetworkAccessGate()
+    gate.result = localNetworkAccessConfirmed
     let vm = SearchViewModel(emoji: "🐟", name: "Fantastic Fish", deviceID: UUID(),
                              service: PreviewNearbyService(),
+                             localNetworkAccessGate: gate,
+                             networkPathMonitor: PreviewNetworkPathMonitor(),
                              connectionHistory: InMemoryConnectionHistoryStore(),
                              historyStore: .preview,
                              onBack: {})
@@ -472,6 +496,11 @@ private let samplePeers: [Peer] = [
     @Previewable @Namespace var ns
     let p = samplePeers[0]
     SearchView(viewModel: previewVM(peers: [p, samplePeers[1]], states: [p: .rejected]), namespace: ns)
+}
+
+#Preview("No local network access") {
+    @Previewable @Namespace var ns
+    SearchView(viewModel: previewVM(peers: [], localNetworkAccessConfirmed: false), namespace: ns)
 }
 
 #endif
